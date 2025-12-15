@@ -194,6 +194,23 @@
             text-align: right;
         }
 
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            font-family: 'Poppins', sans-serif;
+            transition: background 0.2s;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
         .data-table tbody tr:hover {
             background: #f0f9ff;
         }
@@ -288,31 +305,24 @@
             });
 
             useEffect(() => {
-                const loadData = async () => {
-                    try {
-                        const result = await window.storage.get('bowler-entries');
-                        if (result && result.value) {
-                            setEntries(JSON.parse(result.value));
-                        }
-                    } catch (error) {
-                        console.log('No existing data found, starting fresh');
-                    } finally {
-                        setLoading(false);
+                try {
+                    const saved = localStorage.getItem('bowler-entries');
+                    if (saved) {
+                        setEntries(JSON.parse(saved));
                     }
-                };
-                loadData();
+                } catch (error) {
+                    console.log('No existing data found, starting fresh');
+                }
+                setLoading(false);
             }, []);
 
             useEffect(() => {
-                if (!loading && entries.length > 0) {
-                    const saveData = async () => {
-                        try {
-                            await window.storage.set('bowler-entries', JSON.stringify(entries));
-                        } catch (error) {
-                            console.error('Error saving data:', error);
-                        }
-                    };
-                    saveData();
+                if (!loading) {
+                    try {
+                        localStorage.setItem('bowler-entries', JSON.stringify(entries));
+                    } catch (error) {
+                        console.error('Error saving data:', error);
+                    }
                 }
             }, [entries, loading]);
 
@@ -338,6 +348,12 @@
                     conversions: 0
                 });
                 setShowForm(false);
+            };
+
+            const deleteEntry = (index) => {
+                if (confirm('Are you sure you want to delete this entry?')) {
+                    setEntries(prev => prev.filter((_, i) => i !== index));
+                }
             };
 
             const getWeekNumber = (date) => {
@@ -424,7 +440,7 @@
             return (
                 <div className="container">
                     <div className="header">
-                        <h1>🐾 BOWLER CHART TRACKER</h1>
+                        <h1>🎳 BOWLER CHART TRACKER</h1>
                         <div className="subtitle">Daily Performance Tracking Across All 3 Scenters</div>
                     </div>
 
@@ -580,6 +596,7 @@
                                         <th className="text-right">Text</th>
                                         <th className="text-right highlight">Total Booked</th>
                                         <th className="text-right conversion">Conversions</th>
+                                        {view === 'daily' && <th></th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -599,6 +616,11 @@
                                                 {entry.bookedPhone + entry.bookedText}
                                             </td>
                                             <td className="text-right conversion">{entry.conversions}</td>
+                                            <td>
+                                                <button onClick={() => deleteEntry(idx)} className="delete-btn">
+                                                    🗑 Delete
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                     {view === 'weekly' && weeklyData().map((week, idx) => (
