@@ -491,7 +491,7 @@
             return (
                 <div className="container">
                     <div className="header">
-                        <h1>🎳 BOWLER CHART TRACKER</h1>
+                        <h1> 🐾 BOWLER CHART TRACKER</h1>
                         <div className="subtitle">Daily Performance Tracking by Scenter Location</div>
                     </div>
 
@@ -706,7 +706,7 @@
                                     {view === 'weekly' && weeklyData().map((week, idx) => (
                                         <tr key={idx}>
                                             <td style={{ fontWeight: 600 }}>{week.period}</td>
-                                            <td><em>{locationFilter}</em></td>
+                                            <td><strong>{locationFilter}</strong></td>
                                             <td className="text-right">{week.newLeads}</td>
                                             <td className="text-right">{week.activeTrialLeads}</td>
                                             <td className="text-right">{week.texted}</td>
@@ -721,7 +721,7 @@
                                     {view === 'monthly' && monthlyData().map((month, idx) => (
                                         <tr key={idx}>
                                             <td style={{ fontWeight: 600 }}>{month.period}</td>
-                                            <td><em>{locationFilter}</em></td>
+                                            <td><strong>{locationFilter}</strong></td>
                                             <td className="text-right">{month.newLeads}</td>
                                             <td className="text-right">{month.activeTrialLeads}</td>
                                             <td className="text-right">{month.texted}</td>
