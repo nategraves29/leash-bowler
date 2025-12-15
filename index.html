@@ -438,12 +438,45 @@
             };
 
             const exportToCSV = () => {
+                // Individual entries
                 const headers = 'Date,Location,New Leads,Active Trial Leads,Texted,Called,Total Contacted,Booked Phone,Booked Text,Total Booked,Conversions\n';
                 const rows = entries.map(e => 
                     `${e.date},${e.location},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},${e.conversions}`
                 ).join('\n');
                 
-                const blob = new Blob([headers + rows], { type: 'text/csv' });
+                // Aggregate by date for "All Locations"
+                const byDate = {};
+                entries.forEach(e => {
+                    if (!byDate[e.date]) {
+                        byDate[e.date] = {
+                            newLeads: 0,
+                            activeTrialLeads: 0,
+                            texted: 0,
+                            called: 0,
+                            bookedPhone: 0,
+                            bookedText: 0,
+                            conversions: 0
+                        };
+                    }
+                    byDate[e.date].newLeads += e.newLeads;
+                    byDate[e.date].activeTrialLeads += e.activeTrialLeads;
+                    byDate[e.date].texted += e.texted;
+                    byDate[e.date].called += e.called;
+                    byDate[e.date].bookedPhone += e.bookedPhone;
+                    byDate[e.date].bookedText += e.bookedText;
+                    byDate[e.date].conversions += e.conversions;
+                });
+                
+                const aggregatedRows = Object.entries(byDate)
+                    .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
+                    .map(([date, data]) => 
+                        `${date},All Locations,${data.newLeads},${data.activeTrialLeads},${data.texted},${data.called},${data.newLeads + data.activeTrialLeads},${data.bookedPhone},${data.bookedText},${data.bookedPhone + data.bookedText},${data.conversions}`
+                    ).join('\n');
+                
+                // Combine with separator
+                const csvContent = headers + rows + '\n\n' + aggregatedRows;
+                
+                const blob = new Blob([csvContent], { type: 'text/csv' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
