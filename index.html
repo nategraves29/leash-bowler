@@ -194,6 +194,21 @@
             text-align: right;
         }
 
+        .data-table tbody tr:hover {
+            background: #f0f9ff;
+        }
+
+        .data-table td.highlight {
+            background: #f0f9ff;
+            font-weight: 600;
+        }
+
+        .data-table td.conversion {
+            background: #fff8f0;
+            font-weight: 600;
+            color: #FF6B35;
+        }
+
         .delete-btn {
             background: #dc3545;
             color: white;
@@ -209,21 +224,6 @@
 
         .delete-btn:hover {
             background: #c82333;
-        }
-
-        .data-table tbody tr:hover {
-            background: #f0f9ff;
-        }
-
-        .data-table td.highlight {
-            background: #f0f9ff;
-            font-weight: 600;
-        }
-
-        .data-table td.conversion {
-            background: #fff8f0;
-            font-weight: 600;
-            color: #FF6B35;
         }
 
         .empty-state {
@@ -665,6 +665,7 @@
                                 <thead>
                                     <tr>
                                         <th>{view === 'daily' ? 'Date' : 'Period'}</th>
+                                        <th>Location</th>
                                         <th className="text-right">New Leads</th>
                                         <th className="text-right">Active Trial</th>
                                         <th className="text-right">Texted</th>
@@ -674,13 +675,14 @@
                                         <th className="text-right">Text</th>
                                         <th className="text-right highlight">Total Booked</th>
                                         <th className="text-right conversion">Conversions</th>
-                                        {view === 'daily' && <th></th>}
+                                        {view === 'daily' && <th>Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {view === 'daily' && entries.map((entry, idx) => (
+                                    {view === 'daily' && getFilteredEntries().map((entry, idx) => (
                                         <tr key={idx}>
                                             <td>{new Date(entry.date).toLocaleDateString()}</td>
+                                            <td><strong>{entry.location}</strong></td>
                                             <td className="text-right">{entry.newLeads}</td>
                                             <td className="text-right">{entry.activeTrialLeads}</td>
                                             <td className="text-right">{entry.texted}</td>
