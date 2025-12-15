@@ -362,7 +362,7 @@
                     bookedPhone: acc.bookedPhone + entry.bookedPhone,
                     bookedText: acc.bookedText + entry.bookedText,
                     conversions: acc.conversions + entry.conversions,
-                    totalContacted: acc.totalContacted + entry.newLeads + entry.activeTrialLeads + entry.texted + entry.called,
+                    totalContacted: acc.totalContacted + entry.newLeads + entry.activeTrialLeads,
                     totalBooked: acc.totalBooked + entry.bookedPhone + entry.bookedText
                 }), {
                     newLeads: 0,
@@ -406,7 +406,7 @@
             const exportToCSV = () => {
                 const headers = 'Date,New Leads,Active Trial Leads,Texted,Called,Total Contacted,Booked Phone,Booked Text,Total Booked,Conversions\n';
                 const rows = entries.map(e => 
-                    `${e.date},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads + e.texted + e.called},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},${e.conversions}`
+                    `${e.date},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},${e.conversions}`
                 ).join('\n');
                 
                 const blob = new Blob([headers + rows], { type: 'text/csv' });
@@ -591,7 +591,7 @@
                                             <td className="text-right">{entry.texted}</td>
                                             <td className="text-right">{entry.called}</td>
                                             <td className="text-right highlight">
-                                                {entry.newLeads + entry.activeTrialLeads + entry.texted + entry.called}
+                                                {entry.newLeads + entry.activeTrialLeads}
                                             </td>
                                             <td className="text-right">{entry.bookedPhone}</td>
                                             <td className="text-right">{entry.bookedText}</td>
