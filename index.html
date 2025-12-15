@@ -431,6 +431,23 @@
                     ...calculateTotals(entries)
                 })).sort((a, b) => b.period.localeCompare(a.period));
             };
+
+            const yearlyData = () => {
+                const years = {};
+                const filteredEntries = locationFilter === 'All Scenters' 
+                    ? entries 
+                    : entries.filter(e => e.location === locationFilter);
+                    
+                filteredEntries.forEach(entry => {
+                    const year = new Date(entry.date).getFullYear().toString();
+                    if (!years[year]) years[year] = [];
+                    years[year].push(entry);
+                });
+                return Object.entries(years).map(([year, entries]) => ({
+                    period: year,
+                    ...calculateTotals(entries)
+                })).sort((a, b) => b.period.localeCompare(a.period));
+            };
             
             const getFilteredEntries = () => {
                 if (locationFilter === 'All Scenters') return entries;
@@ -491,7 +508,7 @@
             return (
                 <div className="container">
                     <div className="header">
-                        <h1> 🐾 BOWLER CHART TRACKER</h1>
+                        <h1>🎳 BOWLER CHART TRACKER</h1>
                         <div className="subtitle">Daily Performance Tracking by Scenter Location</div>
                     </div>
 
@@ -631,6 +648,12 @@
                         >
                             Monthly View
                         </button>
+                        <button
+                            onClick={() => setView('yearly')}
+                            className={`tab ${view === 'yearly' ? 'active' : ''}`}
+                        >
+                            Yearly View
+                        </button>
                     </div>
 
                     <div style={{ marginBottom: '20px' }}>
@@ -706,7 +729,7 @@
                                     {view === 'weekly' && weeklyData().map((week, idx) => (
                                         <tr key={idx}>
                                             <td style={{ fontWeight: 600 }}>{week.period}</td>
-                                            <td><strong>{locationFilter}</strong></td>
+                                            <td><em>{locationFilter}</em></td>
                                             <td className="text-right">{week.newLeads}</td>
                                             <td className="text-right">{week.activeTrialLeads}</td>
                                             <td className="text-right">{week.texted}</td>
@@ -721,7 +744,7 @@
                                     {view === 'monthly' && monthlyData().map((month, idx) => (
                                         <tr key={idx}>
                                             <td style={{ fontWeight: 600 }}>{month.period}</td>
-                                            <td><strong>{locationFilter}</strong></td>
+                                            <td><em>{locationFilter}</em></td>
                                             <td className="text-right">{month.newLeads}</td>
                                             <td className="text-right">{month.activeTrialLeads}</td>
                                             <td className="text-right">{month.texted}</td>
@@ -731,6 +754,21 @@
                                             <td className="text-right">{month.bookedText}</td>
                                             <td className="text-right highlight">{month.totalBooked}</td>
                                             <td className="text-right conversion">{month.conversions}</td>
+                                        </tr>
+                                    ))}
+                                    {view === 'yearly' && yearlyData().map((year, idx) => (
+                                        <tr key={idx}>
+                                            <td style={{ fontWeight: 600 }}>{year.period}</td>
+                                            <td><em>{locationFilter}</em></td>
+                                            <td className="text-right">{year.newLeads}</td>
+                                            <td className="text-right">{year.activeTrialLeads}</td>
+                                            <td className="text-right">{year.texted}</td>
+                                            <td className="text-right">{year.called}</td>
+                                            <td className="text-right highlight">{year.totalContacted}</td>
+                                            <td className="text-right">{year.bookedPhone}</td>
+                                            <td className="text-right">{year.bookedText}</td>
+                                            <td className="text-right highlight">{year.totalBooked}</td>
+                                            <td className="text-right conversion">{year.conversions}</td>
                                         </tr>
                                     ))}
                                 </tbody>
