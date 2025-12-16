@@ -21,11 +21,11 @@
 
         .container {
             background: white;
-            padding: 0;
-            border-radius: 0;
+            padding: 50px;
+            border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             max-width: 100%;
-            margin: 0;
+            margin: 20px;
         }
 
         .header {
@@ -303,7 +303,8 @@
                 called: 0,
                 bookedPhone: 0,
                 bookedText: 0,
-                conversions: 0
+                conversions: 0,
+                comments: ''
             });
             
             const locations = ['Cedar Mill', 'Tigard', 'Hillsboro', 'Sherwood'];
@@ -333,7 +334,7 @@
             const handleInputChange = (field, value) => {
                 setCurrentEntry(prev => ({
                     ...prev,
-                    [field]: parseInt(value) || 0
+                    [field]: field === 'comments' ? value : (parseInt(value) || 0)
                 }));
             };
 
@@ -350,7 +351,8 @@
                     called: 0,
                     bookedPhone: 0,
                     bookedText: 0,
-                    conversions: 0
+                    conversions: 0,
+                    comments: ''
                 });
                 setShowForm(false);
             };
@@ -456,9 +458,9 @@
 
             const exportToCSV = () => {
                 // Individual entries
-                const headers = 'Date,Location,New Leads,Active Trial Leads,Texted,Called,Total Contacted,Booked Phone,Booked Text,Total Booked,Conversions\n';
+                const headers = 'Date,Location,New Leads,Active Trial Leads,Texted,Called,Total Contacted,Booked Phone,Booked Text,Total Booked,Conversions,Comments\n';
                 const rows = entries.map(e => 
-                    `${e.date},${e.location},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},${e.conversions}`
+                    `${e.date},${e.location},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},${e.conversions},"${(e.comments || '').replace(/"/g, '""')}"`
                 ).join('\n');
                 
                 // Aggregate by date for "All Locations"
@@ -487,7 +489,7 @@
                 const aggregatedRows = Object.entries(byDate)
                     .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
                     .map(([date, data]) => 
-                        `${date},All Locations,${data.newLeads},${data.activeTrialLeads},${data.texted},${data.called},${data.newLeads + data.activeTrialLeads},${data.bookedPhone},${data.bookedText},${data.bookedPhone + data.bookedText},${data.conversions}`
+                        `${date},All Locations,${data.newLeads},${data.activeTrialLeads},${data.texted},${data.called},${data.newLeads + data.activeTrialLeads},${data.bookedPhone},${data.bookedText},${data.bookedPhone + data.bookedText},${data.conversions},""`
                     ).join('\n');
                 
                 // Combine with separator
@@ -508,7 +510,7 @@
             return (
                 <div className="container">
                     <div className="header">
-                        <h1> 🐾 BOWLER CHART TRACKER</h1>
+                        <h1>🎳 BOWLER CHART TRACKER</h1>
                         <div className="subtitle">Daily Performance Tracking by Scenter Location</div>
                     </div>
 
@@ -618,6 +620,20 @@
                                     />
                                 </div>
                             </div>
+                            <div style={{ marginTop: '20px' }}>
+                                <label className="form-label">Comments / Notes</label>
+                                <textarea
+                                    value={currentEntry.comments}
+                                    onChange={(e) => handleInputChange('comments', e.target.value)}
+                                    className="form-input"
+                                    rows="3"
+                                    placeholder="e.g., John Doe - requested callback tomorrow; Jane Smith - unreachable phone number"
+                                    style={{ resize: 'vertical' }}
+                                />
+                                <p style={{ fontSize: '0.85em', color: '#666', marginTop: '5px' }}>
+                                    Note any leads/active trials not contacted and why (requested callback, bad number, etc.)
+                                </p>
+                            </div>
                             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                                 <button onClick={addEntry} className="btn">
                                     ✓ Save Entry
@@ -698,6 +714,7 @@
                                         <th className="text-right">Text</th>
                                         <th className="text-right highlight">Total Booked</th>
                                         <th className="text-right conversion">Conversions</th>
+                                        {view === 'daily' && <th>Comments</th>}
                                         {view === 'daily' && <th>Actions</th>}
                                     </tr>
                                 </thead>
@@ -719,6 +736,7 @@
                                                 {entry.bookedPhone + entry.bookedText}
                                             </td>
                                             <td className="text-right conversion">{entry.conversions}</td>
+                                            <td style={{ fontSize: '0.85em', maxWidth: '200px' }}>{entry.comments || '-'}</td>
                                             <td>
                                                 <button onClick={() => deleteEntry(idx)} className="delete-btn">
                                                     🗑 Delete
