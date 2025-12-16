@@ -303,7 +303,6 @@
                 called: 0,
                 bookedPhone: 0,
                 bookedText: 0,
-                conversions: 0,
                 comments: ''
             });
             
@@ -351,7 +350,6 @@
                     called: 0,
                     bookedPhone: 0,
                     bookedText: 0,
-                    conversions: 0,
                     comments: ''
                 });
                 setShowForm(false);
@@ -384,7 +382,6 @@
                     called: acc.called + entry.called,
                     bookedPhone: acc.bookedPhone + entry.bookedPhone,
                     bookedText: acc.bookedText + entry.bookedText,
-                    conversions: acc.conversions + entry.conversions,
                     totalContacted: acc.totalContacted + entry.newLeads + entry.activeTrialLeads,
                     totalBooked: acc.totalBooked + entry.bookedPhone + entry.bookedText
                 }), {
@@ -394,7 +391,6 @@
                     called: 0,
                     bookedPhone: 0,
                     bookedText: 0,
-                    conversions: 0,
                     totalContacted: 0,
                     totalBooked: 0
                 });
@@ -458,9 +454,9 @@
 
             const exportToCSV = () => {
                 // Individual entries
-                const headers = 'Date,Location,New Leads,Active Trial Leads,Texted,Called,Total Contacted,Booked Phone,Booked Text,Total Booked,Conversions,Comments\n';
+                const headers = 'Date,Location,New Leads,Active Trial Leads,Texted,Called,Total Contacted,Booked Phone,Booked Text,Total Booked,Comments\n';
                 const rows = entries.map(e => 
-                    `${e.date},${e.location},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},${e.conversions},"${(e.comments || '').replace(/"/g, '""')}"`
+                    `${e.date},${e.location},${e.newLeads},${e.activeTrialLeads},${e.texted},${e.called},${e.newLeads + e.activeTrialLeads},${e.bookedPhone},${e.bookedText},${e.bookedPhone + e.bookedText},"${(e.comments || '').replace(/"/g, '""')}"`
                 ).join('\n');
                 
                 // Aggregate by date for "All Locations"
@@ -473,8 +469,7 @@
                             texted: 0,
                             called: 0,
                             bookedPhone: 0,
-                            bookedText: 0,
-                            conversions: 0
+                            bookedText: 0
                         };
                     }
                     byDate[e.date].newLeads += e.newLeads;
@@ -483,13 +478,12 @@
                     byDate[e.date].called += e.called;
                     byDate[e.date].bookedPhone += e.bookedPhone;
                     byDate[e.date].bookedText += e.bookedText;
-                    byDate[e.date].conversions += e.conversions;
                 });
                 
                 const aggregatedRows = Object.entries(byDate)
                     .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
                     .map(([date, data]) => 
-                        `${date},All Locations,${data.newLeads},${data.activeTrialLeads},${data.texted},${data.called},${data.newLeads + data.activeTrialLeads},${data.bookedPhone},${data.bookedText},${data.bookedPhone + data.bookedText},${data.conversions},""`
+                        `${date},All Locations,${data.newLeads},${data.activeTrialLeads},${data.texted},${data.called},${data.newLeads + data.activeTrialLeads},${data.bookedPhone},${data.bookedText},${data.bookedPhone + data.bookedText},""`
                     ).join('\n');
                 
                 // Combine with separator
@@ -610,15 +604,6 @@
                                         className="form-input"
                                     />
                                 </div>
-                                <div>
-                                    <label className="form-label">Conversions</label>
-                                    <input
-                                        type="number"
-                                        value={currentEntry.conversions}
-                                        onChange={(e) => handleInputChange('conversions', e.target.value)}
-                                        className="form-input"
-                                    />
-                                </div>
                             </div>
                             <div style={{ marginTop: '20px' }}>
                                 <label className="form-label">Comments / Notes</label>
@@ -713,7 +698,6 @@
                                         <th className="text-right">Phone</th>
                                         <th className="text-right">Text</th>
                                         <th className="text-right highlight">Total Booked</th>
-                                        <th className="text-right conversion">Conversions</th>
                                         {view === 'daily' && <th>Comments</th>}
                                         {view === 'daily' && <th>Actions</th>}
                                     </tr>
@@ -735,7 +719,6 @@
                                             <td className="text-right highlight">
                                                 {entry.bookedPhone + entry.bookedText}
                                             </td>
-                                            <td className="text-right conversion">{entry.conversions}</td>
                                             <td style={{ fontSize: '0.85em', maxWidth: '200px' }}>{entry.comments || '-'}</td>
                                             <td>
                                                 <button onClick={() => deleteEntry(idx)} className="delete-btn">
@@ -756,7 +739,6 @@
                                             <td className="text-right">{week.bookedPhone}</td>
                                             <td className="text-right">{week.bookedText}</td>
                                             <td className="text-right highlight">{week.totalBooked}</td>
-                                            <td className="text-right conversion">{week.conversions}</td>
                                         </tr>
                                     ))}
                                     {view === 'monthly' && monthlyData().map((month, idx) => (
@@ -771,7 +753,6 @@
                                             <td className="text-right">{month.bookedPhone}</td>
                                             <td className="text-right">{month.bookedText}</td>
                                             <td className="text-right highlight">{month.totalBooked}</td>
-                                            <td className="text-right conversion">{month.conversions}</td>
                                         </tr>
                                     ))}
                                     {view === 'yearly' && yearlyData().map((year, idx) => (
@@ -786,7 +767,6 @@
                                             <td className="text-right">{year.bookedPhone}</td>
                                             <td className="text-right">{year.bookedText}</td>
                                             <td className="text-right highlight">{year.totalBooked}</td>
-                                            <td className="text-right conversion">{year.conversions}</td>
                                         </tr>
                                     ))}
                                 </tbody>
