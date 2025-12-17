@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -294,6 +295,11 @@
             const [loading, setLoading] = useState(true);
             const [view, setView] = useState('daily');
             const [locationFilter, setLocationFilter] = useState('All Scenters');
+            const [chartType, setChartType] = useState('line');
+            const [selectedMetrics, setSelectedMetrics] = useState(['newLeads', 'activeTrialLeads']);
+            const [chartTimeframe, setChartTimeframe] = useState('daily');
+            const chartRef = React.useRef(null);
+            const chartInstance = React.useRef(null);
             const [currentEntry, setCurrentEntry] = useState({
                 date: new Date().toISOString().split('T')[0],
                 location: 'Cedar Mill',
@@ -497,6 +503,147 @@
                 a.click();
             };
 
+            const metricOptions = [
+                { value: 'newLeads', label: 'New Leads' },
+                { value: 'activeTrialLeads', label: 'Active Trial Leads' },
+                { value: 'texted', label: 'Texted' },
+                { value: 'called', label: 'Called' },
+                { value: 'totalContacted', label: 'Total Contacted' },
+                { value: 'bookedPhone', label: 'Booked (Phone)' },
+                { value: 'bookedText', label: 'Booked (Text)' },
+                { value: 'totalBooked', label: 'Total Booked' }
+            ];
+
+            const getChartData = () => {
+                let data = [];
+                let labels = [];
+                
+                const filteredEntries = locationFilter === 'All Scenters' 
+                    ? entries 
+                    : entries.filter(e => e.location === locationFilter);
+
+                if (chartTimeframe === 'daily') {
+                    const grouped = {};
+                    filteredEntries.forEach(entry => {
+                        const date = entry.date;
+                        if (!grouped[date]) {
+                            grouped[date] = {
+                                newLeads: 0,
+                                activeTrialLeads: 0,
+                                texted: 0,
+                                called: 0,
+                                bookedPhone: 0,
+                                bookedText: 0,
+                                totalContacted: 0,
+                                totalBooked: 0
+                            };
+                        }
+                        grouped[date].newLeads += entry.newLeads;
+                        grouped[date].activeTrialLeads += entry.activeTrialLeads;
+                        grouped[date].texted += entry.texted;
+                        grouped[date].called += entry.called;
+                        grouped[date].bookedPhone += entry.bookedPhone;
+                        grouped[date].bookedText += entry.bookedText;
+                        grouped[date].totalContacted += entry.texted + entry.called;
+                        grouped[date].totalBooked += entry.bookedPhone + entry.bookedText;
+                    });
+                    
+                    labels = Object.keys(grouped).sort();
+                    data = labels.map(date => grouped[date]);
+                } else if (chartTimeframe === 'weekly') {
+                    data = weeklyData();
+                    labels = data.map(d => d.period);
+                } else if (chartTimeframe === 'monthly') {
+                    data = monthlyData();
+                    labels = data.map(d => d.period);
+                } else if (chartTimeframe === 'yearly') {
+                    data = yearlyData();
+                    labels = data.map(d => d.period);
+                }
+
+                return { labels, data };
+            };
+
+            const renderChart = () => {
+                if (!chartRef.current) return;
+
+                // Destroy existing chart
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+
+                const { labels, data } = getChartData();
+                const ctx = chartRef.current.getContext('2d');
+
+                const datasets = selectedMetrics.map((metric, idx) => {
+                    const colors = [
+                        'rgb(0, 160, 220)',
+                        'rgb(255, 107, 53)',
+                        'rgb(0, 119, 182)',
+                        'rgb(255, 159, 64)',
+                        'rgb(75, 192, 192)',
+                        'rgb(153, 102, 255)',
+                        'rgb(255, 205, 86)',
+                        'rgb(201, 203, 207)'
+                    ];
+                    
+                    return {
+                        label: metricOptions.find(m => m.value === metric).label,
+                        data: data.map(d => d[metric] || 0),
+                        borderColor: colors[idx % colors.length],
+                        backgroundColor: colors[idx % colors.length].replace('rgb', 'rgba').replace(')', ', 0.2)'),
+                        tension: 0.1,
+                        fill: chartType === 'area'
+                    };
+                });
+
+                chartInstance.current = new Chart(ctx, {
+                    type: chartType === 'area' ? 'line' : chartType,
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `${locationFilter} - ${chartTimeframe.charAt(0).toUpperCase() + chartTimeframe.slice(1)} Performance`,
+                                font: {
+                                    size: 16,
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        scales: chartType !== 'pie' && chartType !== 'doughnut' ? {
+                            y: {
+                                beginAtZero: true
+                            }
+                        } : {}
+                    }
+                });
+            };
+
+            useEffect(() => {
+                if (view === 'charts' && entries.length > 0) {
+                    renderChart();
+                }
+            }, [view, chartType, selectedMetrics, chartTimeframe, locationFilter, entries]);
+
+            const toggleMetric = (metric) => {
+                setSelectedMetrics(prev => {
+                    if (prev.includes(metric)) {
+                        return prev.filter(m => m !== metric);
+                    } else {
+                        return [...prev, metric];
+                    }
+                });
+            };
+
             if (loading) {
                 return <div className="container">Loading...</div>;
             }
@@ -655,6 +802,12 @@
                         >
                             Yearly View
                         </button>
+                        <button
+                            onClick={() => setView('charts')}
+                            className={`tab ${view === 'charts' ? 'active' : ''}`}
+                        >
+                            📊 Charts
+                        </button>
                     </div>
 
                     <div style={{ marginBottom: '20px' }}>
@@ -682,6 +835,94 @@
                             </svg>
                             <h2 style={{ color: '#00A0DC' }}>No Entries Yet</h2>
                             <p style={{ fontSize: '1.1em' }}>Click "Add Daily Entry" to start tracking your performance!</p>
+                        </div>
+                    ) : view === 'charts' ? (
+                        <div>
+                            <div className="form-box">
+                                <h3 style={{ color: '#0077B6', marginTop: 0 }}>Chart Configuration</h3>
+                                
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label className="form-label">Chart Type</label>
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <button
+                                            onClick={() => setChartType('line')}
+                                            className={chartType === 'line' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Line Chart
+                                        </button>
+                                        <button
+                                            onClick={() => setChartType('bar')}
+                                            className={chartType === 'bar' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Bar Chart
+                                        </button>
+                                        <button
+                                            onClick={() => setChartType('area')}
+                                            className={chartType === 'area' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Area Chart
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label className="form-label">Timeframe</label>
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <button
+                                            onClick={() => setChartTimeframe('daily')}
+                                            className={chartTimeframe === 'daily' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Daily
+                                        </button>
+                                        <button
+                                            onClick={() => setChartTimeframe('weekly')}
+                                            className={chartTimeframe === 'weekly' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Weekly
+                                        </button>
+                                        <button
+                                            onClick={() => setChartTimeframe('monthly')}
+                                            className={chartTimeframe === 'monthly' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Monthly
+                                        </button>
+                                        <button
+                                            onClick={() => setChartTimeframe('yearly')}
+                                            className={chartTimeframe === 'yearly' ? 'btn' : 'btn btn-cancel'}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            Yearly
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="form-label">Metrics to Display (select multiple)</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+                                        {metricOptions.map(metric => (
+                                            <label key={metric.value} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedMetrics.includes(metric.value)}
+                                                    onChange={() => toggleMetric(metric.value)}
+                                                    style={{ marginRight: '8px', cursor: 'pointer' }}
+                                                />
+                                                <span>{metric.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', marginTop: '20px' }}>
+                                <canvas ref={chartRef} style={{ maxHeight: '500px' }}></canvas>
+                            </div>
                         </div>
                     ) : (
                         <div style={{ overflowX: 'auto' }}>
