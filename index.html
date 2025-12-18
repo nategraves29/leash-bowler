@@ -639,10 +639,10 @@
                     : entries.filter(e => e.location === locationFilter);
 
                 // Apply date range filter if set
-                if (chartDateFrom) {
+                if (chartDateFrom && chartDateFrom !== '') {
                     filteredEntries = filteredEntries.filter(e => e.date >= chartDateFrom);
                 }
-                if (chartDateTo) {
+                if (chartDateTo && chartDateTo !== '') {
                     filteredEntries = filteredEntries.filter(e => e.date <= chartDateTo);
                 }
 
