@@ -1124,8 +1124,8 @@
                                     <p style={{ fontSize: '0.85em', color: '#666', marginBottom: '10px' }}>
                                         Filter data to a specific date range for focused analysis
                                     </p>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                                        <div>
+                                    <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                        <div style={{ flex: '1', minWidth: '150px', maxWidth: '250px' }}>
                                             <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>From Date</label>
                                             <input
                                                 type="date"
@@ -1134,7 +1134,7 @@
                                                 className="form-input"
                                             />
                                         </div>
-                                        <div>
+                                        <div style={{ flex: '1', minWidth: '150px', maxWidth: '250px' }}>
                                             <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>To Date</label>
                                             <input
                                                 type="date"
@@ -1143,7 +1143,7 @@
                                                 className="form-input"
                                             />
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                        <div>
                                             <button
                                                 onClick={() => {
                                                     setChartDateFrom('');
