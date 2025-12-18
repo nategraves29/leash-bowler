@@ -1125,28 +1125,28 @@
                                     <p style={{ fontSize: '0.85em', color: '#666', marginBottom: '10px' }}>
                                         Filter data to a specific date range for focused analysis
                                     </p>
-                                    <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                                        <div style={{ width: '200px' }}>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                        <div style={{ marginRight: '20px', marginBottom: '10px' }}>
                                             <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>From Date</label>
                                             <input
                                                 type="date"
                                                 value={chartDateFrom}
                                                 onChange={(e) => setChartDateFrom(e.target.value)}
                                                 className="form-input"
-                                                style={{ boxSizing: 'border-box' }}
+                                                style={{ width: '180px', boxSizing: 'border-box' }}
                                             />
                                         </div>
-                                        <div style={{ width: '200px' }}>
+                                        <div style={{ marginRight: '20px', marginBottom: '10px' }}>
                                             <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>To Date</label>
                                             <input
                                                 type="date"
                                                 value={chartDateTo}
                                                 onChange={(e) => setChartDateTo(e.target.value)}
                                                 className="form-input"
-                                                style={{ boxSizing: 'border-box' }}
+                                                style={{ width: '180px', boxSizing: 'border-box' }}
                                             />
                                         </div>
-                                        <div>
+                                        <div style={{ marginBottom: '10px' }}>
                                             <button
                                                 onClick={() => {
                                                     setChartDateFrom('');
