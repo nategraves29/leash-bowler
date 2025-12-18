@@ -328,7 +328,7 @@
             const chartRef = React.useRef(null);
             const chartInstance = React.useRef(null);
             const [currentEntry, setCurrentEntry] = useState({
-                date: new Date().toISOString().split('T')[0],
+                date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
                 location: 'Cedar Mill',
                 newLeads: 0,
                 activeTrialLeads: 0,
@@ -389,7 +389,7 @@
                     await window.firestoreAddDoc(entriesCol, currentEntry);
                     await loadEntriesFromFirebase(); // Reload to get updated list
                     setCurrentEntry({
-                        date: new Date().toISOString().split('T')[0],
+                        date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
                         location: 'Cedar Mill',
                         newLeads: 0,
                         activeTrialLeads: 0,
