@@ -638,14 +638,6 @@
                     ? entries 
                     : entries.filter(e => e.location === locationFilter);
 
-                // Apply date range filter if set
-                if (chartDateFrom && chartDateFrom !== '') {
-                    filteredEntries = filteredEntries.filter(e => e.date >= chartDateFrom);
-                }
-                if (chartDateTo && chartDateTo !== '') {
-                    filteredEntries = filteredEntries.filter(e => e.date <= chartDateTo);
-                }
-
                 if (chartTimeframe === 'daily') {
                     const grouped = {};
                     filteredEntries.forEach(entry => {
@@ -831,7 +823,7 @@
                 if (view === 'charts' && entries.length > 0) {
                     renderChart();
                 }
-            }, [view, chartType, selectedMetrics, chartTimeframe, locationFilter, entries, chartDateFrom, chartDateTo]);
+            }, [view, chartType, selectedMetrics, chartTimeframe, locationFilter, entries]);
 
             const toggleMetric = (metric) => {
                 setSelectedMetrics(prev => {
@@ -1039,8 +1031,6 @@
                         </div>
                     ) : view === 'charts' ? (
                         <div>
-                            {typeof chartDateFrom !== 'undefined' && typeof chartDateTo !== 'undefined' ? (
-                            <>
                             <div className="form-box">
                                 <h3 style={{ color: '#0077B6', marginTop: 0 }}>Chart Configuration</h3>
                                 
@@ -1119,42 +1109,6 @@
                                     </div>
                                 </div>
 
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label className="form-label">Date Range Filter (Optional)</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                                        <div>
-                                            <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>From Date</label>
-                                            <input
-                                                type="date"
-                                                value={chartDateFrom}
-                                                onChange={(e) => setChartDateFrom(e.target.value)}
-                                                className="form-input"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>To Date</label>
-                                            <input
-                                                type="date"
-                                                value={chartDateTo}
-                                                onChange={(e) => setChartDateTo(e.target.value)}
-                                                className="form-input"
-                                            />
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                                            <button
-                                                onClick={() => {
-                                                    setChartDateFrom('');
-                                                    setChartDateTo('');
-                                                }}
-                                                className="btn btn-cancel"
-                                                style={{ padding: '10px 20px', width: '100%' }}
-                                            >
-                                                Clear Dates
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <div>
                                     <label className="form-label">Metrics to Display (select multiple)</label>
                                     {(chartType === 'pie' || chartType === 'doughnut') && (
@@ -1181,10 +1135,6 @@
                             <div style={{ background: 'white', padding: '20px', borderRadius: '8px', marginTop: '20px' }}>
                                 <canvas ref={chartRef} style={{ maxHeight: '500px' }}></canvas>
                             </div>
-                            </>
-                            ) : (
-                                <div>Loading chart controls...</div>
-                            )}
                         </div>
                     ) : (
                         <div style={{ overflowX: 'auto' }}>
