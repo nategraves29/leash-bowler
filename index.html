@@ -634,9 +634,17 @@
                 let data = [];
                 let labels = [];
                 
-                const filteredEntries = locationFilter === 'All Scenters' 
+                let filteredEntries = locationFilter === 'All Scenters' 
                     ? entries 
                     : entries.filter(e => e.location === locationFilter);
+
+                // Apply date range filter if set
+                if (chartDateFrom) {
+                    filteredEntries = filteredEntries.filter(e => e.date >= chartDateFrom);
+                }
+                if (chartDateTo) {
+                    filteredEntries = filteredEntries.filter(e => e.date <= chartDateTo);
+                }
 
                 if (chartTimeframe === 'daily') {
                     const grouped = {};
@@ -667,13 +675,40 @@
                     labels = Object.keys(grouped).sort();
                     data = labels.map(date => grouped[date]);
                 } else if (chartTimeframe === 'weekly') {
-                    data = weeklyData();
+                    const weeks = {};
+                    filteredEntries.forEach(entry => {
+                        const week = `${new Date(entry.date).getFullYear()}-W${getWeekNumber(entry.date)}`;
+                        if (!weeks[week]) weeks[week] = [];
+                        weeks[week].push(entry);
+                    });
+                    data = Object.entries(weeks).map(([week, entries]) => ({
+                        period: week,
+                        ...calculateTotals(entries)
+                    })).sort((a, b) => a.period.localeCompare(b.period));
                     labels = data.map(d => d.period);
                 } else if (chartTimeframe === 'monthly') {
-                    data = monthlyData();
+                    const months = {};
+                    filteredEntries.forEach(entry => {
+                        const month = getMonthYear(entry.date);
+                        if (!months[month]) months[month] = [];
+                        months[month].push(entry);
+                    });
+                    data = Object.entries(months).map(([month, entries]) => ({
+                        period: new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
+                        ...calculateTotals(entries)
+                    })).sort((a, b) => a.period.localeCompare(b.period));
                     labels = data.map(d => d.period);
                 } else if (chartTimeframe === 'yearly') {
-                    data = yearlyData();
+                    const years = {};
+                    filteredEntries.forEach(entry => {
+                        const year = new Date(entry.date).getFullYear().toString();
+                        if (!years[year]) years[year] = [];
+                        years[year].push(entry);
+                    });
+                    data = Object.entries(years).map(([year, entries]) => ({
+                        period: year,
+                        ...calculateTotals(entries)
+                    })).sort((a, b) => a.period.localeCompare(b.period));
                     labels = data.map(d => d.period);
                 }
 
@@ -796,7 +831,7 @@
                 if (view === 'charts' && entries.length > 0) {
                     renderChart();
                 }
-            }, [view, chartType, selectedMetrics, chartTimeframe, locationFilter, entries]);
+            }, [view, chartType, selectedMetrics, chartTimeframe, locationFilter, entries, chartDateFrom, chartDateTo]);
 
             const toggleMetric = (metric) => {
                 setSelectedMetrics(prev => {
@@ -1079,6 +1114,42 @@
                                         >
                                             Yearly
                                         </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label className="form-label">Date Range Filter (Optional)</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>From Date</label>
+                                            <input
+                                                type="date"
+                                                value={chartDateFrom}
+                                                onChange={(e) => setChartDateFrom(e.target.value)}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.9em', color: '#666', display: 'block', marginBottom: '5px' }}>To Date</label>
+                                            <input
+                                                type="date"
+                                                value={chartDateTo}
+                                                onChange={(e) => setChartDateTo(e.target.value)}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                            <button
+                                                onClick={() => {
+                                                    setChartDateFrom('');
+                                                    setChartDateTo('');
+                                                }}
+                                                className="btn btn-cancel"
+                                                style={{ padding: '10px 20px', width: '100%' }}
+                                            >
+                                                Clear Dates
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
