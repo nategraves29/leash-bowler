@@ -705,15 +705,49 @@
                 let datasets;
 
                 if (chartType === 'pie' || chartType === 'doughnut') {
-                    // For pie/doughnut, show distribution of a single metric across time periods or locations
-                    const metric = selectedMetrics[0] || 'newLeads'; // Use first selected metric
+                    // For pie/doughnut, sum up each selected metric across all data points
+                    const metricTotals = selectedMetrics.map(metric => {
+                        const total = data.reduce((sum, d) => sum + (d[metric] || 0), 0);
+                        return total;
+                    });
+                    
                     datasets = [{
-                        label: metricOptions.find(m => m.value === metric)?.label || 'Data',
-                        data: data.map(d => d[metric] || 0),
-                        backgroundColor: labels.map((_, idx) => colors[idx % colors.length].replace('rgb', 'rgba').replace(')', ', 0.7)')),
-                        borderColor: labels.map((_, idx) => colors[idx % colors.length]),
+                        label: 'Totals',
+                        data: metricTotals,
+                        backgroundColor: selectedMetrics.map((_, idx) => colors[idx % colors.length].replace('rgb', 'rgba').replace(')', ', 0.7)')),
+                        borderColor: selectedMetrics.map((_, idx) => colors[idx % colors.length]),
                         borderWidth: 1
                     }];
+                    
+                    // Use metric names as labels for pie/doughnut
+                    const pieLabels = selectedMetrics.map(metric => 
+                        metricOptions.find(m => m.value === metric).label
+                    );
+                    
+                    chartInstance.current = new Chart(ctx, {
+                        type: chartType,
+                        data: {
+                            labels: pieLabels,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                },
+                                title: {
+                                    display: true,
+                                    text: `${locationFilter} - ${chartTimeframe.charAt(0).toUpperCase() + chartTimeframe.slice(1)} Totals`,
+                                    font: {
+                                        size: 16,
+                                        weight: 'bold'
+                                    }
+                                }
+                            }
+                        }
+                    });
                 } else {
                     datasets = selectedMetrics.map((metric, idx) => {
                         return {
@@ -725,37 +759,37 @@
                             fill: chartType === 'area'
                         };
                     });
-                }
-
-                chartInstance.current = new Chart(ctx, {
-                    type: chartType === 'area' ? 'line' : chartType,
-                    data: {
-                        labels: labels,
-                        datasets: datasets
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
+                    
+                    chartInstance.current = new Chart(ctx, {
+                        type: chartType === 'area' ? 'line' : chartType,
+                        data: {
+                            labels: labels,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                },
+                                title: {
+                                    display: true,
+                                    text: `${locationFilter} - ${chartTimeframe.charAt(0).toUpperCase() + chartTimeframe.slice(1)} Performance`,
+                                    font: {
+                                        size: 16,
+                                        weight: 'bold'
+                                    }
+                                }
                             },
-                            title: {
-                                display: true,
-                                text: `${locationFilter} - ${chartTimeframe.charAt(0).toUpperCase() + chartTimeframe.slice(1)} Performance`,
-                                font: {
-                                    size: 16,
-                                    weight: 'bold'
+                            scales: {
+                                y: {
+                                    beginAtZero: true
                                 }
                             }
-                        },
-                        scales: chartType !== 'pie' && chartType !== 'doughnut' ? {
-                            y: {
-                                beginAtZero: true
-                            }
-                        } : {}
-                    }
-                });
+                        }
+                    });
+                }
             };
 
             useEffect(() => {
@@ -1049,26 +1083,19 @@
                                 </div>
 
                                 <div>
-                                    <label className="form-label">Metrics to Display {chartType === 'pie' || chartType === 'doughnut' ? '(select one)' : '(select multiple)'}</label>
+                                    <label className="form-label">Metrics to Display (select multiple)</label>
                                     {(chartType === 'pie' || chartType === 'doughnut') && (
                                         <p style={{ fontSize: '0.85em', color: '#666', marginBottom: '10px' }}>
-                                            Pie/Doughnut charts show distribution of one metric across time periods
+                                            Pie/Doughnut charts show total values for each selected metric
                                         </p>
                                     )}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
                                         {metricOptions.map(metric => (
                                             <label key={metric.value} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                                                 <input
-                                                    type={chartType === 'pie' || chartType === 'doughnut' ? 'radio' : 'checkbox'}
-                                                    name="metric"
+                                                    type="checkbox"
                                                     checked={selectedMetrics.includes(metric.value)}
-                                                    onChange={() => {
-                                                        if (chartType === 'pie' || chartType === 'doughnut') {
-                                                            setSelectedMetrics([metric.value]);
-                                                        } else {
-                                                            toggleMetric(metric.value);
-                                                        }
-                                                    }}
+                                                    onChange={() => toggleMetric(metric.value)}
                                                     style={{ marginRight: '8px', cursor: 'pointer' }}
                                                 />
                                                 <span>{metric.label}</span>
