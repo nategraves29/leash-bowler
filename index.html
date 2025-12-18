@@ -228,6 +228,24 @@
             background: #c82333;
         }
 
+        .edit-btn {
+            background: #ffc107;
+            color: #333;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            font-family: 'Poppins', sans-serif;
+            transition: background 0.2s;
+            margin-right: 5px;
+        }
+
+        .edit-btn:hover {
+            background: #e0a800;
+        }
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -325,6 +343,7 @@
             const [chartType, setChartType] = useState('line');
             const [selectedMetrics, setSelectedMetrics] = useState(['newLeads', 'activeTrialLeads']);
             const [chartTimeframe, setChartTimeframe] = useState('daily');
+            const [editingEntry, setEditingEntry] = useState(null);
             const chartRef = React.useRef(null);
             const chartInstance = React.useRef(null);
             const [currentEntry, setCurrentEntry] = useState({
@@ -385,9 +404,19 @@
 
             const addEntry = async () => {
                 try {
-                    const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
-                    await window.firestoreAddDoc(entriesCol, currentEntry);
-                    await loadEntriesFromFirebase(); // Reload to get updated list
+                    if (editingEntry) {
+                        // Update existing entry
+                        const docRef = window.firestoreDoc(window.firebaseDB, 'entries', editingEntry.id);
+                        await window.firestoreDeleteDoc(docRef);
+                        const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
+                        await window.firestoreAddDoc(entriesCol, currentEntry);
+                        setEditingEntry(null);
+                    } else {
+                        // Add new entry
+                        const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
+                        await window.firestoreAddDoc(entriesCol, currentEntry);
+                    }
+                    await loadEntriesFromFirebase();
                     setCurrentEntry({
                         date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
                         location: 'Cedar Mill',
@@ -401,7 +430,7 @@
                     });
                     setShowForm(false);
                 } catch (error) {
-                    console.error('Error adding entry:', error);
+                    console.error('Error saving entry:', error);
                     alert('Error saving entry. Please try again.');
                 }
             };
@@ -412,12 +441,46 @@
                         const entry = getFilteredEntries()[index];
                         const docRef = window.firestoreDoc(window.firebaseDB, 'entries', entry.id);
                         await window.firestoreDeleteDoc(docRef);
-                        await loadEntriesFromFirebase(); // Reload to get updated list
+                        await loadEntriesFromFirebase();
                     } catch (error) {
                         console.error('Error deleting entry:', error);
                         alert('Error deleting entry. Please try again.');
                     }
                 }
+            };
+
+            const editEntry = (index) => {
+                const entry = getFilteredEntries()[index];
+                setCurrentEntry({
+                    date: entry.date,
+                    location: entry.location,
+                    newLeads: entry.newLeads,
+                    activeTrialLeads: entry.activeTrialLeads,
+                    texted: entry.texted,
+                    called: entry.called,
+                    bookedPhone: entry.bookedPhone,
+                    bookedText: entry.bookedText,
+                    comments: entry.comments || ''
+                });
+                setEditingEntry(entry);
+                setShowForm(true);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
+            const cancelEdit = () => {
+                setEditingEntry(null);
+                setCurrentEntry({
+                    date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
+                    location: 'Cedar Mill',
+                    newLeads: 0,
+                    activeTrialLeads: 0,
+                    texted: 0,
+                    called: 0,
+                    bookedPhone: 0,
+                    bookedText: 0,
+                    comments: ''
+                });
+                setShowForm(false);
             };
 
             const getWeekNumber = (date) => {
@@ -727,7 +790,9 @@
 
                     {showForm && (
                         <div className="form-box">
-                            <h2 style={{ color: '#0077B6', marginTop: 0, marginBottom: 20 }}>📅 New Daily Entry</h2>
+                            <h2 style={{ color: '#0077B6', marginTop: 0, marginBottom: 20 }}>
+                                {editingEntry ? '✏️ Edit Entry' : '📅 New Daily Entry'}
+                            </h2>
                             <div className="form-grid">
                                 <div>
                                     <label className="form-label">Date</label>
@@ -821,9 +886,9 @@
                             </div>
                             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                                 <button onClick={addEntry} className="btn">
-                                    ✓ Save Entry
+                                    {editingEntry ? '✓ Update Entry' : '✓ Save Entry'}
                                 </button>
-                                <button onClick={() => setShowForm(false)} className="btn btn-cancel">
+                                <button onClick={cancelEdit} className="btn btn-cancel">
                                     Cancel
                                 </button>
                             </div>
@@ -1015,6 +1080,9 @@
                                             </td>
                                             <td style={{ fontSize: '0.85em', maxWidth: '200px' }}>{entry.comments || '-'}</td>
                                             <td>
+                                                <button onClick={() => editEntry(idx)} className="edit-btn">
+                                                    ✏️ Edit
+                                                </button>
                                                 <button onClick={() => deleteEntry(idx)} className="delete-btn">
                                                     🗑 Delete
                                                 </button>
