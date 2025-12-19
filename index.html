@@ -549,10 +549,16 @@
                     if (!months[month]) months[month] = [];
                     months[month].push(entry);
                 });
-                return Object.entries(months).map(([month, entries]) => ({
-                    period: new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
-                    ...calculateTotals(entries)
-                })).sort((a, b) => b.period.localeCompare(a.period));
+                return Object.entries(months).map(([month, entries]) => {
+                    const [year, monthNum] = month.split('-');
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                        'July', 'August', 'September', 'October', 'November', 'December'];
+                    return {
+                        period: `${monthNames[parseInt(monthNum) - 1]} ${year}`,
+                        sortKey: month,
+                        ...calculateTotals(entries)
+                    };
+                }).sort((a, b) => b.sortKey.localeCompare(a.sortKey));
             };
 
             const yearlyData = () => {
@@ -696,10 +702,16 @@
                         if (!months[month]) months[month] = [];
                         months[month].push(entry);
                     });
-                    data = Object.entries(months).map(([month, entries]) => ({
-                        period: new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
-                        ...calculateTotals(entries)
-                    })).sort((a, b) => a.period.localeCompare(b.period));
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    data = Object.entries(months).map(([month, entries]) => {
+                        const [year, monthNum] = month.split('-');
+                        return {
+                            period: `${monthNames[parseInt(monthNum) - 1]} ${year}`,
+                            sortKey: month,
+                            ...calculateTotals(entries)
+                        };
+                    }).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
                     labels = data.map(d => d.period);
                 } else if (chartTimeframe === 'yearly') {
                     const years = {};
