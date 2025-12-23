@@ -587,14 +587,35 @@
                 const startOfLastWeek = new Date(startOfThisWeek);
                 startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
                 
-                const thisWeekEntries = filteredEntries.filter(e => new Date(e.date) >= startOfThisWeek);
+                const thisWeekEntries = filteredEntries.filter(e => {
+                    const parts = e.date.split('-');
+                    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                    return d >= startOfThisWeek;
+                });
                 const lastWeekEntries = filteredEntries.filter(e => {
-                    const d = new Date(e.date);
+                    const parts = e.date.split('-');
+                    const d = new Date(parts[0], parts[1] - 1, parts[2]);
                     return d >= startOfLastWeek && d < startOfThisWeek;
                 });
                 
                 const thisWeek = calculateTotals(thisWeekEntries);
                 const lastWeek = calculateTotals(lastWeekEntries);
+                
+                // Calculate conversion rate (Total Booked / New Leads)
+                const thisWeekConversion = thisWeek.newLeads > 0 
+                    ? (thisWeek.totalBooked / thisWeek.newLeads) * 100 
+                    : 0;
+                const lastWeekConversion = lastWeek.newLeads > 0 
+                    ? (lastWeek.totalBooked / lastWeek.newLeads) * 100 
+                    : 0;
+                
+                // Calculate contact rate (Total Contacted / (New Leads + Active Trial))
+                const thisWeekContactRate = (thisWeek.newLeads + thisWeek.activeTrialLeads) > 0
+                    ? (thisWeek.totalContacted / (thisWeek.newLeads + thisWeek.activeTrialLeads)) * 100
+                    : 0;
+                const lastWeekContactRate = (lastWeek.newLeads + lastWeek.activeTrialLeads) > 0
+                    ? (lastWeek.totalContacted / (lastWeek.newLeads + lastWeek.activeTrialLeads)) * 100
+                    : 0;
                 
                 const getTrend = (current, previous) => {
                     if (previous === 0) return current > 0 ? 'up' : 'neutral';
@@ -604,17 +625,31 @@
                     return 'neutral';
                 };
                 
+                const getTrendForRate = (current, previous) => {
+                    const diff = current - previous;
+                    if (diff > 2) return 'up';
+                    if (diff < -2) return 'down';
+                    return 'neutral';
+                };
+                
                 const getChange = (current, previous) => {
                     if (previous === 0) return current > 0 ? '+' + current : '0';
                     const change = ((current - previous) / previous) * 100;
                     return (change >= 0 ? '+' : '') + change.toFixed(0) + '%';
                 };
                 
+                const getChangeForRate = (current, previous) => {
+                    const diff = current - previous;
+                    return (diff >= 0 ? '+' : '') + diff.toFixed(1) + 'pts';
+                };
+                
                 return {
                     newLeads: { trend: getTrend(thisWeek.newLeads, lastWeek.newLeads), change: getChange(thisWeek.newLeads, lastWeek.newLeads), current: thisWeek.newLeads },
                     activeTrialLeads: { trend: getTrend(thisWeek.activeTrialLeads, lastWeek.activeTrialLeads), change: getChange(thisWeek.activeTrialLeads, lastWeek.activeTrialLeads), current: thisWeek.activeTrialLeads },
                     totalContacted: { trend: getTrend(thisWeek.totalContacted, lastWeek.totalContacted), change: getChange(thisWeek.totalContacted, lastWeek.totalContacted), current: thisWeek.totalContacted },
-                    totalBooked: { trend: getTrend(thisWeek.totalBooked, lastWeek.totalBooked), change: getChange(thisWeek.totalBooked, lastWeek.totalBooked), current: thisWeek.totalBooked }
+                    totalBooked: { trend: getTrend(thisWeek.totalBooked, lastWeek.totalBooked), change: getChange(thisWeek.totalBooked, lastWeek.totalBooked), current: thisWeek.totalBooked },
+                    conversionRate: { trend: getTrendForRate(thisWeekConversion, lastWeekConversion), change: getChangeForRate(thisWeekConversion, lastWeekConversion), current: thisWeekConversion.toFixed(1) },
+                    contactRate: { trend: getTrendForRate(thisWeekContactRate, lastWeekContactRate), change: getChangeForRate(thisWeekContactRate, lastWeekContactRate), current: thisWeekContactRate.toFixed(1) }
                 };
             };
 
@@ -662,8 +697,12 @@
                 }
                 
                 const totals = calculateTotals(reportData);
-                const conversionRate = totals.totalContacted > 0 
-                    ? ((totals.totalBooked / totals.totalContacted) * 100).toFixed(1) 
+                const conversionRate = totals.newLeads > 0 
+                    ? ((totals.totalBooked / totals.newLeads) * 100).toFixed(1) 
+                    : 0;
+                
+                const contactRate = (totals.newLeads + totals.activeTrialLeads) > 0
+                    ? ((totals.totalContacted / (totals.newLeads + totals.activeTrialLeads)) * 100).toFixed(1)
                     : 0;
                 
                 // Create PDF using browser print
@@ -743,9 +782,17 @@
                             </div>
                         </div>
                         
-                        <div class="stat-box" style="text-align: center; margin-bottom: 30px;">
-                            <div class="value" style="color: #FF6B35;">${conversionRate}%</div>
-                            <div class="label">Conversion Rate (Booked / Contacted)</div>
+                        <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="stat-box" style="border: 3px solid #22c55e;">
+                                <div class="value" style="color: #22c55e;">${conversionRate}%</div>
+                                <div class="label">Conversion Rate</div>
+                                <div class="label" style="font-size: 0.8em; color: #999;">Total Booked / New Leads</div>
+                            </div>
+                            <div class="stat-box" style="border: 3px solid #8b5cf6;">
+                                <div class="value" style="color: #8b5cf6;">${contactRate}%</div>
+                                <div class="label">Contact Rate</div>
+                                <div class="label" style="font-size: 0.8em; color: #999;">Total Contacted / All Leads</div>
+                            </div>
                         </div>
                         
                         <h3>Daily Breakdown</h3>
@@ -1234,7 +1281,7 @@
                             <h3 style={{ margin: '0 0 15px 0', color: '#0077B6', fontSize: '1em' }}>
                                 📈 This Week vs Last Week ({locationFilter})
                             </h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
                                 {(() => {
                                     const trends = calculateTrends();
                                     return (
@@ -1266,6 +1313,22 @@
                                                     <TrendIndicator trend={trends.totalBooked.trend} change={trends.totalBooked.change} />
                                                 </div>
                                                 <div style={{ fontSize: '0.85em', color: '#666' }}>Total Booked</div>
+                                            </div>
+                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center', border: '2px solid #22c55e' }}>
+                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#22c55e' }}>
+                                                    {trends.conversionRate.current}%
+                                                    <TrendIndicator trend={trends.conversionRate.trend} change={trends.conversionRate.change} />
+                                                </div>
+                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Conversion Rate</div>
+                                                <div style={{ fontSize: '0.7em', color: '#999' }}>Booked / New Leads</div>
+                                            </div>
+                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center', border: '2px solid #8b5cf6' }}>
+                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#8b5cf6' }}>
+                                                    {trends.contactRate.current}%
+                                                    <TrendIndicator trend={trends.contactRate.trend} change={trends.contactRate.change} />
+                                                </div>
+                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Contact Rate</div>
+                                                <div style={{ fontSize: '0.7em', color: '#999' }}>Contacted / All Leads</div>
                                             </div>
                                         </>
                                     );
