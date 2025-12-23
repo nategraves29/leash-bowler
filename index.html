@@ -527,17 +527,26 @@
                 setShowForm(false);
             };
 
-            const getWeekNumber = (date) => {
-                const d = new Date(date);
+            const getWeekNumber = (dateStr) => {
+                // Parse date string as local time, not UTC
+                const parts = dateStr.split('-');
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
                 d.setHours(0, 0, 0, 0);
                 d.setDate(d.getDate() + 4 - (d.getDay() || 7));
                 const yearStart = new Date(d.getFullYear(), 0, 1);
                 return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
             };
 
-            const getMonthYear = (date) => {
-                const d = new Date(date);
-                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const getMonthYear = (dateStr) => {
+                // Parse date string as local time, not UTC
+                const parts = dateStr.split('-');
+                return `${parts[0]}-${parts[1]}`;
+            };
+
+            const getYearFromDate = (dateStr) => {
+                // Parse date string as local time, not UTC
+                const parts = dateStr.split('-');
+                return parts[0];
             };
 
             const calculateTotals = (entriesSubset) => {
@@ -782,7 +791,9 @@
                     : entries.filter(e => e.location === locationFilter);
                     
                 filteredEntries.forEach(entry => {
-                    const week = `${new Date(entry.date).getFullYear()}-W${getWeekNumber(entry.date)}`;
+                    const parts = entry.date.split('-');
+                    const year = parts[0];
+                    const week = `${year}-W${getWeekNumber(entry.date)}`;
                     if (!weeks[week]) weeks[week] = [];
                     weeks[week].push(entry);
                 });
@@ -822,7 +833,7 @@
                     : entries.filter(e => e.location === locationFilter);
                     
                 filteredEntries.forEach(entry => {
-                    const year = new Date(entry.date).getFullYear().toString();
+                    const year = getYearFromDate(entry.date);
                     if (!years[year]) years[year] = [];
                     years[year].push(entry);
                 });
@@ -940,7 +951,9 @@
                 } else if (chartTimeframe === 'weekly') {
                     const weeks = {};
                     filteredEntries.forEach(entry => {
-                        const week = `${new Date(entry.date).getFullYear()}-W${getWeekNumber(entry.date)}`;
+                        const parts = entry.date.split('-');
+                        const year = parts[0];
+                        const week = `${year}-W${getWeekNumber(entry.date)}`;
                         if (!weeks[week]) weeks[week] = [];
                         weeks[week].push(entry);
                     });
@@ -970,7 +983,7 @@
                 } else if (chartTimeframe === 'yearly') {
                     const years = {};
                     filteredEntries.forEach(entry => {
-                        const year = new Date(entry.date).getFullYear().toString();
+                        const year = getYearFromDate(entry.date);
                         if (!years[year]) years[year] = [];
                         years[year].push(entry);
                     });
