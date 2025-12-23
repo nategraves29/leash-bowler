@@ -789,6 +789,7 @@
                 const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
                 const currentDay = today.getDate();
                 const daysRemaining = daysInMonth - currentDay;
+                const conservativeMultiplier = 0.8; // 80% of pace for conservative estimate
 
                 // Get this month's entries
                 const thisMonthEntries = entries.filter(e => {
@@ -806,11 +807,19 @@
                 const avgBooked = totals.totalBooked / daysWithData;
                 const avgContacted = totals.totalContacted / daysWithData;
 
-                // Project end of month
+                // Project end of month (on-pace)
                 const projectedNewLeads = Math.round(totals.newLeads + (avgNewLeads * daysRemaining));
                 const projectedBooked = Math.round(totals.totalBooked + (avgBooked * daysRemaining));
                 const projectedContacted = Math.round(totals.totalContacted + (avgContacted * daysRemaining));
+                
+                // Conservative projections (80% of remaining pace)
+                const conservativeNewLeads = Math.round(totals.newLeads + (avgNewLeads * daysRemaining * conservativeMultiplier));
+                const conservativeBooked = Math.round(totals.totalBooked + (avgBooked * daysRemaining * conservativeMultiplier));
+                const conservativeContacted = Math.round(totals.totalContacted + (avgContacted * daysRemaining * conservativeMultiplier));
+                
+                // Conversion rates for both scenarios
                 const projectedConversion = projectedNewLeads > 0 ? ((projectedBooked / projectedNewLeads) * 100).toFixed(1) : 0;
+                const conservativeConversion = conservativeNewLeads > 0 ? ((conservativeBooked / conservativeNewLeads) * 100).toFixed(1) : 0;
 
                 return {
                     current: totals,
@@ -821,6 +830,12 @@
                         totalBooked: projectedBooked,
                         totalContacted: projectedContacted,
                         conversionRate: projectedConversion
+                    },
+                    conservative: {
+                        newLeads: conservativeNewLeads,
+                        totalBooked: conservativeBooked,
+                        totalContacted: conservativeContacted,
+                        conversionRate: conservativeConversion
                     },
                     daily: {
                         avgNewLeads: avgNewLeads.toFixed(1),
@@ -2028,7 +2043,7 @@
                         <div>
                             <div className="form-box">
                                 <h3 style={{ color: '#0077B6', marginTop: 0 }}>🔮 End of Month Forecast</h3>
-                                <p style={{ color: '#666', fontSize: '0.9em' }}>Projected totals based on your current pace this month.</p>
+                                <p style={{ color: '#666', fontSize: '0.9em' }}>Projected totals based on your current pace this month. Range shows conservative (80%) to on-pace estimates.</p>
                             </div>
                             
                             {calculateForecast() ? (
@@ -2053,41 +2068,44 @@
                                     </div>
                                     
                                     <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%)', padding: '25px', borderRadius: '8px', border: '2px solid #0077B6' }}>
-                                        <h4 style={{ color: '#0077B6', marginTop: 0, marginBottom: '20px' }}>📈 Projected End-of-Month Totals</h4>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px' }}>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Current → Projected</div>
-                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#0077B6' }}>
-                                                    {calculateForecast().current.newLeads} → {calculateForecast().projected.newLeads}
+                                        <h4 style={{ color: '#0077B6', marginTop: 0, marginBottom: '10px' }}>📈 Projected End-of-Month Totals</h4>
+                                        <p style={{ color: '#666', fontSize: '0.85em', margin: '0 0 20px 0' }}>
+                                            <span style={{ color: '#6b7280', fontWeight: 600 }}>Conservative (80%)</span> → <span style={{ color: '#0077B6', fontWeight: 600 }}>On-Pace (100%)</span>
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+                                            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '8px' }}>New Leads</div>
+                                                <div style={{ fontSize: '1.2em', color: '#666', marginBottom: '5px' }}>Current: <strong>{calculateForecast().current.newLeads}</strong></div>
+                                                <div style={{ fontSize: '1.6em', fontWeight: 'bold', color: '#0077B6' }}>
+                                                    {calculateForecast().conservative.newLeads} - {calculateForecast().projected.newLeads}
                                                 </div>
-                                                <div style={{ fontSize: '0.9em', color: '#666' }}>New Leads</div>
                                             </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Current → Projected</div>
-                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#0077B6' }}>
-                                                    {calculateForecast().current.totalContacted} → {calculateForecast().projected.totalContacted}
+                                            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '8px' }}>Total Contacted</div>
+                                                <div style={{ fontSize: '1.2em', color: '#666', marginBottom: '5px' }}>Current: <strong>{calculateForecast().current.totalContacted}</strong></div>
+                                                <div style={{ fontSize: '1.6em', fontWeight: 'bold', color: '#0077B6' }}>
+                                                    {calculateForecast().conservative.totalContacted} - {calculateForecast().projected.totalContacted}
                                                 </div>
-                                                <div style={{ fontSize: '0.9em', color: '#666' }}>Total Contacted</div>
                                             </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Current → Projected</div>
-                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#FF6B35' }}>
-                                                    {calculateForecast().current.totalBooked} → {calculateForecast().projected.totalBooked}
+                                            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center', border: '2px solid #FF6B35' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '8px' }}>Total Booked</div>
+                                                <div style={{ fontSize: '1.2em', color: '#666', marginBottom: '5px' }}>Current: <strong>{calculateForecast().current.totalBooked}</strong></div>
+                                                <div style={{ fontSize: '1.6em', fontWeight: 'bold', color: '#FF6B35' }}>
+                                                    {calculateForecast().conservative.totalBooked} - {calculateForecast().projected.totalBooked}
                                                 </div>
-                                                <div style={{ fontSize: '0.9em', color: '#666' }}>Total Booked</div>
                                             </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Projected</div>
-                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#22c55e' }}>
-                                                    {calculateForecast().projected.conversionRate}%
+                                            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center', border: '2px solid #22c55e' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '8px' }}>Conversion Rate</div>
+                                                <div style={{ fontSize: '1.2em', color: '#666', marginBottom: '5px' }}>&nbsp;</div>
+                                                <div style={{ fontSize: '1.6em', fontWeight: 'bold', color: '#22c55e' }}>
+                                                    {calculateForecast().conservative.conversionRate}% - {calculateForecast().projected.conversionRate}%
                                                 </div>
-                                                <div style={{ fontSize: '0.9em', color: '#666' }}>Conversion Rate</div>
                                             </div>
                                         </div>
                                     </div>
                                     
                                     <div style={{ marginTop: '20px', padding: '15px', background: '#fff8f0', borderRadius: '8px', borderLeft: '4px solid #FF6B35' }}>
-                                        <strong style={{ color: '#FF6B35' }}>💡 Note:</strong> Projections are based on your daily averages so far this month. Actual results may vary based on weekends, holidays, and other factors.
+                                        <strong style={{ color: '#FF6B35' }}>💡 How to read this:</strong> The conservative estimate (80%) accounts for slower days, weekends, and holidays. The on-pace estimate assumes you maintain your current daily average. Reality usually falls somewhere in between.
                                     </div>
                                 </>
                             ) : (
