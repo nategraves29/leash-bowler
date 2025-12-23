@@ -350,6 +350,7 @@
             const [deletedEntries, setDeletedEntries] = useState([]);
             const [showUndoToast, setShowUndoToast] = useState(false);
             const [userName, setUserName] = useState(() => localStorage.getItem('bowlerUserName') || '');
+            const [trendPeriod, setTrendPeriod] = useState('week');
             const chartRef = React.useRef(null);
             const chartInstance = React.useRef(null);
             const [currentEntry, setCurrentEntry] = useState({
@@ -580,41 +581,82 @@
                 if (filteredEntries.length === 0) return null;
                 
                 const today = new Date();
-                const startOfThisWeek = new Date(today);
-                startOfThisWeek.setDate(today.getDate() - today.getDay());
-                startOfThisWeek.setHours(0, 0, 0, 0);
+                today.setHours(23, 59, 59, 999);
                 
-                const startOfLastWeek = new Date(startOfThisWeek);
-                startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+                let currentPeriodStart, previousPeriodStart, previousPeriodEnd;
                 
-                const thisWeekEntries = filteredEntries.filter(e => {
+                if (trendPeriod === 'week') {
+                    // This Week vs Last Week
+                    currentPeriodStart = new Date(today);
+                    currentPeriodStart.setDate(today.getDate() - today.getDay());
+                    currentPeriodStart.setHours(0, 0, 0, 0);
+                    
+                    previousPeriodEnd = new Date(currentPeriodStart);
+                    previousPeriodEnd.setMilliseconds(-1);
+                    
+                    previousPeriodStart = new Date(currentPeriodStart);
+                    previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
+                } else if (trendPeriod === 'month') {
+                    // This Month vs Last Month
+                    currentPeriodStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                    
+                    previousPeriodEnd = new Date(currentPeriodStart);
+                    previousPeriodEnd.setMilliseconds(-1);
+                    
+                    previousPeriodStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                } else if (trendPeriod === 'last7') {
+                    // Last 7 Days vs Previous 7 Days
+                    currentPeriodStart = new Date(today);
+                    currentPeriodStart.setDate(today.getDate() - 6);
+                    currentPeriodStart.setHours(0, 0, 0, 0);
+                    
+                    previousPeriodEnd = new Date(currentPeriodStart);
+                    previousPeriodEnd.setMilliseconds(-1);
+                    
+                    previousPeriodStart = new Date(currentPeriodStart);
+                    previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
+                } else if (trendPeriod === 'last30') {
+                    // Last 30 Days vs Previous 30 Days
+                    currentPeriodStart = new Date(today);
+                    currentPeriodStart.setDate(today.getDate() - 29);
+                    currentPeriodStart.setHours(0, 0, 0, 0);
+                    
+                    previousPeriodEnd = new Date(currentPeriodStart);
+                    previousPeriodEnd.setMilliseconds(-1);
+                    
+                    previousPeriodStart = new Date(currentPeriodStart);
+                    previousPeriodStart.setDate(previousPeriodStart.getDate() - 30);
+                }
+                
+                const currentPeriodEntries = filteredEntries.filter(e => {
                     const parts = e.date.split('-');
                     const d = new Date(parts[0], parts[1] - 1, parts[2]);
-                    return d >= startOfThisWeek;
-                });
-                const lastWeekEntries = filteredEntries.filter(e => {
-                    const parts = e.date.split('-');
-                    const d = new Date(parts[0], parts[1] - 1, parts[2]);
-                    return d >= startOfLastWeek && d < startOfThisWeek;
+                    return d >= currentPeriodStart && d <= today;
                 });
                 
-                const thisWeek = calculateTotals(thisWeekEntries);
-                const lastWeek = calculateTotals(lastWeekEntries);
+                const previousPeriodEntries = filteredEntries.filter(e => {
+                    const parts = e.date.split('-');
+                    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                    return d >= previousPeriodStart && d <= previousPeriodEnd;
+                });
+                
+                const currentTotals = calculateTotals(currentPeriodEntries);
+                const previousTotals = calculateTotals(previousPeriodEntries);
                 
                 // Calculate conversion rate (Total Booked / New Leads)
-                const thisWeekConversion = thisWeek.newLeads > 0 
-                    ? (thisWeek.totalBooked / thisWeek.newLeads) * 100 
+                const currentConversion = currentTotals.newLeads > 0 
+                    ? (currentTotals.totalBooked / currentTotals.newLeads) * 100 
                     : 0;
-                const lastWeekConversion = lastWeek.newLeads > 0 
-                    ? (lastWeek.totalBooked / lastWeek.newLeads) * 100 
+                const previousConversion = previousTotals.newLeads > 0 
+                    ? (previousTotals.totalBooked / previousTotals.newLeads) * 100 
                     : 0;
                 
                 // Calculate contact rate (Total Contacted / (New Leads + Active Trial))
-                const thisWeekContactRate = (thisWeek.newLeads + thisWeek.activeTrialLeads) > 0
-                    ? (thisWeek.totalContacted / (thisWeek.newLeads + thisWeek.activeTrialLeads)) * 100
+                const currentContactRate = (currentTotals.newLeads + currentTotals.activeTrialLeads) > 0
+                    ? (currentTotals.totalContacted / (currentTotals.newLeads + currentTotals.activeTrialLeads)) * 100
                     : 0;
-                const lastWeekContactRate = (lastWeek.newLeads + lastWeek.activeTrialLeads) > 0
-                    ? (lastWeek.totalContacted / (lastWeek.newLeads + lastWeek.activeTrialLeads)) * 100
+                const previousContactRate = (previousTotals.newLeads + previousTotals.activeTrialLeads) > 0
+                    ? (previousTotals.totalContacted / (previousTotals.newLeads + previousTotals.activeTrialLeads)) * 100
                     : 0;
                 
                 const getTrend = (current, previous) => {
@@ -644,13 +686,23 @@
                 };
                 
                 return {
-                    newLeads: { trend: getTrend(thisWeek.newLeads, lastWeek.newLeads), change: getChange(thisWeek.newLeads, lastWeek.newLeads), current: thisWeek.newLeads },
-                    activeTrialLeads: { trend: getTrend(thisWeek.activeTrialLeads, lastWeek.activeTrialLeads), change: getChange(thisWeek.activeTrialLeads, lastWeek.activeTrialLeads), current: thisWeek.activeTrialLeads },
-                    totalContacted: { trend: getTrend(thisWeek.totalContacted, lastWeek.totalContacted), change: getChange(thisWeek.totalContacted, lastWeek.totalContacted), current: thisWeek.totalContacted },
-                    totalBooked: { trend: getTrend(thisWeek.totalBooked, lastWeek.totalBooked), change: getChange(thisWeek.totalBooked, lastWeek.totalBooked), current: thisWeek.totalBooked },
-                    conversionRate: { trend: getTrendForRate(thisWeekConversion, lastWeekConversion), change: getChangeForRate(thisWeekConversion, lastWeekConversion), current: thisWeekConversion.toFixed(1) },
-                    contactRate: { trend: getTrendForRate(thisWeekContactRate, lastWeekContactRate), change: getChangeForRate(thisWeekContactRate, lastWeekContactRate), current: thisWeekContactRate.toFixed(1) }
+                    newLeads: { trend: getTrend(currentTotals.newLeads, previousTotals.newLeads), change: getChange(currentTotals.newLeads, previousTotals.newLeads), current: currentTotals.newLeads },
+                    activeTrialLeads: { trend: getTrend(currentTotals.activeTrialLeads, previousTotals.activeTrialLeads), change: getChange(currentTotals.activeTrialLeads, previousTotals.activeTrialLeads), current: currentTotals.activeTrialLeads },
+                    totalContacted: { trend: getTrend(currentTotals.totalContacted, previousTotals.totalContacted), change: getChange(currentTotals.totalContacted, previousTotals.totalContacted), current: currentTotals.totalContacted },
+                    totalBooked: { trend: getTrend(currentTotals.totalBooked, previousTotals.totalBooked), change: getChange(currentTotals.totalBooked, previousTotals.totalBooked), current: currentTotals.totalBooked },
+                    conversionRate: { trend: getTrendForRate(currentConversion, previousConversion), change: getChangeForRate(currentConversion, previousConversion), current: currentConversion.toFixed(1) },
+                    contactRate: { trend: getTrendForRate(currentContactRate, previousContactRate), change: getChangeForRate(currentContactRate, previousContactRate), current: currentContactRate.toFixed(1) }
                 };
+            };
+            
+            const getTrendPeriodLabel = () => {
+                switch(trendPeriod) {
+                    case 'week': return 'This Week vs Last Week';
+                    case 'month': return 'This Month vs Last Month';
+                    case 'last7': return 'Last 7 Days vs Previous 7 Days';
+                    case 'last30': return 'Last 30 Days vs Previous 30 Days';
+                    default: return '';
+                }
             };
 
             const TrendIndicator = ({ trend, change }) => {
@@ -1278,9 +1330,22 @@
                             marginBottom: '30px',
                             border: '1px solid #00A0DC'
                         }}>
-                            <h3 style={{ margin: '0 0 15px 0', color: '#0077B6', fontSize: '1em' }}>
-                                📈 This Week vs Last Week ({locationFilter})
-                            </h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
+                                <h3 style={{ margin: 0, color: '#0077B6', fontSize: '1em' }}>
+                                    📈 {getTrendPeriodLabel()} ({locationFilter})
+                                </h3>
+                                <select
+                                    value={trendPeriod}
+                                    onChange={(e) => setTrendPeriod(e.target.value)}
+                                    className="form-input"
+                                    style={{ width: 'auto', padding: '8px 12px', fontSize: '0.9em' }}
+                                >
+                                    <option value="week">This Week vs Last Week</option>
+                                    <option value="month">This Month vs Last Month</option>
+                                    <option value="last7">Last 7 Days vs Previous 7</option>
+                                    <option value="last30">Last 30 Days vs Previous 30</option>
+                                </select>
+                            </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
                                 {(() => {
                                     const trends = calculateTrends();
