@@ -351,8 +351,14 @@
             const [showUndoToast, setShowUndoToast] = useState(false);
             const [userName, setUserName] = useState(() => localStorage.getItem('bowlerUserName') || '');
             const [trendPeriod, setTrendPeriod] = useState('week');
+            const [dashboardMetrics, setDashboardMetrics] = useState(() => {
+                const saved = localStorage.getItem('bowlerDashboardMetrics');
+                return saved ? JSON.parse(saved) : ['newLeads', 'totalBooked', 'conversionRate', 'contactRate'];
+            });
+            const [showDashboardSettings, setShowDashboardSettings] = useState(false);
             const chartRef = React.useRef(null);
             const chartInstance = React.useRef(null);
+            const fileInputRef = React.useRef(null);
             const [currentEntry, setCurrentEntry] = useState({
                 date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
                 location: 'Cedar Mill',
@@ -714,6 +720,183 @@
                     </span>
                 );
             };
+
+            // Data Backup Function
+            const downloadBackup = () => {
+                const backup = {
+                    version: '1.0',
+                    exportDate: new Date().toISOString(),
+                    entries: entries
+                };
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bowler_backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            };
+
+            // Data Restore Function
+            const handleRestore = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    const backup = JSON.parse(text);
+                    
+                    if (!backup.entries || !Array.isArray(backup.entries)) {
+                        alert('Invalid backup file format');
+                        return;
+                    }
+
+                    const confirmMsg = `This backup contains ${backup.entries.length} entries from ${backup.exportDate ? new Date(backup.exportDate).toLocaleDateString() : 'unknown date'}.\n\nDo you want to:\n- OK: Merge with existing data (add new entries only)\n- Cancel: Abort restore`;
+                    
+                    if (confirm(confirmMsg)) {
+                        // Merge - only add entries that don't exist
+                        const existingDates = new Set(entries.map(e => `${e.date}-${e.location}`));
+                        const newEntries = backup.entries.filter(e => !existingDates.has(`${e.date}-${e.location}`));
+                        
+                        if (newEntries.length === 0) {
+                            alert('No new entries to add - all entries already exist.');
+                            return;
+                        }
+
+                        for (const entry of newEntries) {
+                            const { id, ...entryData } = entry;
+                            const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
+                            await window.firestoreAddDoc(entriesCol, entryData);
+                        }
+                        
+                        await loadEntriesFromFirebase();
+                        alert(`Successfully imported ${newEntries.length} new entries!`);
+                    }
+                } catch (error) {
+                    console.error('Error restoring backup:', error);
+                    alert('Error reading backup file. Please make sure it\'s a valid JSON file.');
+                }
+                
+                // Reset file input
+                event.target.value = '';
+            };
+
+            // Forecasting Function
+            const calculateForecast = () => {
+                const today = new Date();
+                const currentMonth = today.getMonth();
+                const currentYear = today.getFullYear();
+                const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                const currentDay = today.getDate();
+                const daysRemaining = daysInMonth - currentDay;
+
+                // Get this month's entries
+                const thisMonthEntries = entries.filter(e => {
+                    const parts = e.date.split('-');
+                    return parseInt(parts[0]) === currentYear && parseInt(parts[1]) === currentMonth + 1;
+                });
+
+                if (thisMonthEntries.length === 0) return null;
+
+                const totals = calculateTotals(thisMonthEntries);
+                const daysWithData = new Set(thisMonthEntries.map(e => e.date)).size;
+                
+                // Calculate daily averages
+                const avgNewLeads = totals.newLeads / daysWithData;
+                const avgBooked = totals.totalBooked / daysWithData;
+                const avgContacted = totals.totalContacted / daysWithData;
+
+                // Project end of month
+                const projectedNewLeads = Math.round(totals.newLeads + (avgNewLeads * daysRemaining));
+                const projectedBooked = Math.round(totals.totalBooked + (avgBooked * daysRemaining));
+                const projectedContacted = Math.round(totals.totalContacted + (avgContacted * daysRemaining));
+                const projectedConversion = projectedNewLeads > 0 ? ((projectedBooked / projectedNewLeads) * 100).toFixed(1) : 0;
+
+                return {
+                    current: totals,
+                    daysWithData,
+                    daysRemaining,
+                    projected: {
+                        newLeads: projectedNewLeads,
+                        totalBooked: projectedBooked,
+                        totalContacted: projectedContacted,
+                        conversionRate: projectedConversion
+                    },
+                    daily: {
+                        avgNewLeads: avgNewLeads.toFixed(1),
+                        avgBooked: avgBooked.toFixed(1),
+                        avgContacted: avgContacted.toFixed(1)
+                    }
+                };
+            };
+
+            // Location Comparison Function
+            const getLocationComparison = () => {
+                const today = new Date();
+                let startDate, endDate;
+
+                if (trendPeriod === 'week') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - today.getDay());
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = today;
+                } else if (trendPeriod === 'month') {
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                    endDate = today;
+                } else if (trendPeriod === 'last7') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 6);
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = today;
+                } else {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 29);
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = today;
+                }
+
+                const comparison = locations.map(location => {
+                    const locationEntries = entries.filter(e => {
+                        const parts = e.date.split('-');
+                        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                        return e.location === location && d >= startDate && d <= endDate;
+                    });
+
+                    const totals = calculateTotals(locationEntries);
+                    const conversionRate = totals.newLeads > 0 
+                        ? ((totals.totalBooked / totals.newLeads) * 100).toFixed(1)
+                        : '0.0';
+
+                    return {
+                        location,
+                        ...totals,
+                        conversionRate,
+                        entryCount: locationEntries.length
+                    };
+                });
+
+                return comparison;
+            };
+
+            // Save dashboard metrics preference
+            const toggleDashboardMetric = (metric) => {
+                setDashboardMetrics(prev => {
+                    const updated = prev.includes(metric)
+                        ? prev.filter(m => m !== metric)
+                        : [...prev, metric];
+                    localStorage.setItem('bowlerDashboardMetrics', JSON.stringify(updated));
+                    return updated;
+                });
+            };
+
+            const allDashboardMetrics = [
+                { key: 'newLeads', label: 'New Leads', color: '#0077B6' },
+                { key: 'activeTrialLeads', label: 'Active Trial', color: '#0077B6' },
+                { key: 'totalContacted', label: 'Total Contacted', color: '#0077B6' },
+                { key: 'totalBooked', label: 'Total Booked', color: '#FF6B35' },
+                { key: 'conversionRate', label: 'Conversion Rate', color: '#22c55e', isRate: true },
+                { key: 'contactRate', label: 'Contact Rate', color: '#8b5cf6', isRate: true }
+            ];
 
             // PDF Report Generation
             const generatePDFReport = (reportType) => {
@@ -1255,8 +1438,21 @@
                                     <button onClick={() => generatePDFReport('monthly')} className="btn" style={{ background: '#8b5cf6' }}>
                                         📄 Monthly Report
                                     </button>
+                                    <button onClick={downloadBackup} className="btn" style={{ background: '#6b7280' }}>
+                                        💾 Backup Data
+                                    </button>
                                 </>
                             )}
+                            <button onClick={() => fileInputRef.current?.click()} className="btn" style={{ background: '#0ea5e9' }}>
+                                📂 Restore Backup
+                            </button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleRestore}
+                                accept=".json"
+                                style={{ display: 'none' }}
+                            />
                         </div>
                         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                             <label style={{ fontSize: '0.9em', color: '#666' }}>Your Name:</label>
@@ -1345,56 +1541,56 @@
                                     <option value="last7">Last 7 Days vs Previous 7</option>
                                     <option value="last30">Last 30 Days vs Previous 30</option>
                                 </select>
+                                <button
+                                    onClick={() => setShowDashboardSettings(!showDashboardSettings)}
+                                    className="btn"
+                                    style={{ padding: '8px 12px', fontSize: '0.9em', background: '#6b7280' }}
+                                >
+                                    ⚙️ Customize
+                                </button>
                             </div>
+                            
+                            {showDashboardSettings && (
+                                <div style={{ background: 'white', padding: '15px', borderRadius: '6px', marginBottom: '15px' }}>
+                                    <p style={{ margin: '0 0 10px 0', fontSize: '0.9em', color: '#666' }}>Select metrics to display:</p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                                        {allDashboardMetrics.map(metric => (
+                                            <label key={metric.key} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.9em' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={dashboardMetrics.includes(metric.key)}
+                                                    onChange={() => toggleDashboardMetric(metric.key)}
+                                                    style={{ marginRight: '5px' }}
+                                                />
+                                                {metric.label}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
                                 {(() => {
                                     const trends = calculateTrends();
                                     return (
                                         <>
-                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#0077B6' }}>
-                                                    {trends.newLeads.current}
-                                                    <TrendIndicator trend={trends.newLeads.trend} change={trends.newLeads.change} />
-                                                </div>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>New Leads</div>
-                                            </div>
-                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#0077B6' }}>
-                                                    {trends.activeTrialLeads.current}
-                                                    <TrendIndicator trend={trends.activeTrialLeads.trend} change={trends.activeTrialLeads.change} />
-                                                </div>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Active Trial</div>
-                                            </div>
-                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#0077B6' }}>
-                                                    {trends.totalContacted.current}
-                                                    <TrendIndicator trend={trends.totalContacted.trend} change={trends.totalContacted.change} />
-                                                </div>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Total Contacted</div>
-                                            </div>
-                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#FF6B35' }}>
-                                                    {trends.totalBooked.current}
-                                                    <TrendIndicator trend={trends.totalBooked.trend} change={trends.totalBooked.change} />
-                                                </div>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Total Booked</div>
-                                            </div>
-                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center', border: '2px solid #22c55e' }}>
-                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#22c55e' }}>
-                                                    {trends.conversionRate.current}%
-                                                    <TrendIndicator trend={trends.conversionRate.trend} change={trends.conversionRate.change} />
-                                                </div>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Conversion Rate</div>
-                                                <div style={{ fontSize: '0.7em', color: '#999' }}>Booked / New Leads</div>
-                                            </div>
-                                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center', border: '2px solid #8b5cf6' }}>
-                                                <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#8b5cf6' }}>
-                                                    {trends.contactRate.current}%
-                                                    <TrendIndicator trend={trends.contactRate.trend} change={trends.contactRate.change} />
-                                                </div>
-                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Contact Rate</div>
-                                                <div style={{ fontSize: '0.7em', color: '#999' }}>Contacted / All Leads</div>
-                                            </div>
+                                            {dashboardMetrics.map(metricKey => {
+                                                const metric = allDashboardMetrics.find(m => m.key === metricKey);
+                                                if (!metric || !trends[metricKey]) return null;
+                                                const isRate = metric.isRate;
+                                                const borderStyle = isRate ? `2px solid ${metric.color}` : 'none';
+                                                return (
+                                                    <div key={metricKey} style={{ background: 'white', padding: '15px', borderRadius: '6px', textAlign: 'center', border: borderStyle }}>
+                                                        <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: metric.color }}>
+                                                            {trends[metricKey].current}{isRate ? '%' : ''}
+                                                            <TrendIndicator trend={trends[metricKey].trend} change={trends[metricKey].change} />
+                                                        </div>
+                                                        <div style={{ fontSize: '0.85em', color: '#666' }}>{metric.label}</div>
+                                                        {metricKey === 'conversionRate' && <div style={{ fontSize: '0.7em', color: '#999' }}>Booked / New Leads</div>}
+                                                        {metricKey === 'contactRate' && <div style={{ fontSize: '0.7em', color: '#999' }}>Contacted / All Leads</div>}
+                                                    </div>
+                                                );
+                                            })}
                                         </>
                                     );
                                 })()}
@@ -1551,6 +1747,18 @@
                             className={`tab ${view === 'charts' ? 'active' : ''}`}
                         >
                             📊 Charts
+                        </button>
+                        <button
+                            onClick={() => setView('comparison')}
+                            className={`tab ${view === 'comparison' ? 'active' : ''}`}
+                        >
+                            📍 Compare Locations
+                        </button>
+                        <button
+                            onClick={() => setView('forecast')}
+                            className={`tab ${view === 'forecast' ? 'active' : ''}`}
+                        >
+                            🔮 Forecast
                         </button>
                     </div>
 
@@ -1727,6 +1935,151 @@
                             <div style={{ background: 'white', padding: '20px', borderRadius: '8px', marginTop: '20px' }}>
                                 <canvas ref={chartRef} style={{ maxHeight: '500px' }}></canvas>
                             </div>
+                        </div>
+                    ) : view === 'comparison' ? (
+                        <div>
+                            <div className="form-box">
+                                <h3 style={{ color: '#0077B6', marginTop: 0 }}>📍 Location Comparison - {getTrendPeriodLabel()}</h3>
+                                <p style={{ color: '#666', fontSize: '0.9em' }}>Compare performance across all locations for the selected time period.</p>
+                            </div>
+                            
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Location</th>
+                                            <th className="text-right">New Leads</th>
+                                            <th className="text-right">Active Trial</th>
+                                            <th className="text-right highlight">Total Contacted</th>
+                                            <th className="text-right highlight">Total Booked</th>
+                                            <th className="text-right" style={{ background: '#22c55e' }}>Conversion Rate</th>
+                                            <th className="text-right">Days with Data</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {getLocationComparison().map((loc, idx) => (
+                                            <tr key={idx}>
+                                                <td><strong>{loc.location}</strong></td>
+                                                <td className="text-right">{loc.newLeads}</td>
+                                                <td className="text-right">{loc.activeTrialLeads}</td>
+                                                <td className="text-right highlight">{loc.totalContacted}</td>
+                                                <td className="text-right highlight">{loc.totalBooked}</td>
+                                                <td className="text-right" style={{ color: '#22c55e', fontWeight: 'bold' }}>{loc.conversionRate}%</td>
+                                                <td className="text-right">{loc.entryCount}</td>
+                                            </tr>
+                                        ))}
+                                        <tr style={{ background: '#f0f9ff', fontWeight: 'bold' }}>
+                                            <td>TOTAL</td>
+                                            <td className="text-right">{getLocationComparison().reduce((sum, l) => sum + l.newLeads, 0)}</td>
+                                            <td className="text-right">{getLocationComparison().reduce((sum, l) => sum + l.activeTrialLeads, 0)}</td>
+                                            <td className="text-right highlight">{getLocationComparison().reduce((sum, l) => sum + l.totalContacted, 0)}</td>
+                                            <td className="text-right highlight">{getLocationComparison().reduce((sum, l) => sum + l.totalBooked, 0)}</td>
+                                            <td className="text-right" style={{ color: '#22c55e' }}>
+                                                {(() => {
+                                                    const totalLeads = getLocationComparison().reduce((sum, l) => sum + l.newLeads, 0);
+                                                    const totalBooked = getLocationComparison().reduce((sum, l) => sum + l.totalBooked, 0);
+                                                    return totalLeads > 0 ? ((totalBooked / totalLeads) * 100).toFixed(1) : '0.0';
+                                                })()}%
+                                            </td>
+                                            <td className="text-right">{getLocationComparison().reduce((sum, l) => sum + l.entryCount, 0)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            {/* Visual Comparison Bars */}
+                            <div style={{ marginTop: '30px' }}>
+                                <h4 style={{ color: '#0077B6', marginBottom: '15px' }}>Conversion Rate by Location</h4>
+                                {getLocationComparison().map((loc, idx) => (
+                                    <div key={idx} style={{ marginBottom: '15px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                            <span style={{ fontWeight: 600 }}>{loc.location}</span>
+                                            <span style={{ color: '#22c55e', fontWeight: 'bold' }}>{loc.conversionRate}%</span>
+                                        </div>
+                                        <div style={{ background: '#e0e0e0', borderRadius: '4px', height: '24px', overflow: 'hidden' }}>
+                                            <div style={{
+                                                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                                width: `${Math.min(parseFloat(loc.conversionRate), 100)}%`,
+                                                height: '100%',
+                                                borderRadius: '4px',
+                                                transition: 'width 0.5s ease'
+                                            }}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : view === 'forecast' ? (
+                        <div>
+                            <div className="form-box">
+                                <h3 style={{ color: '#0077B6', marginTop: 0 }}>🔮 End of Month Forecast</h3>
+                                <p style={{ color: '#666', fontSize: '0.9em' }}>Projected totals based on your current pace this month.</p>
+                            </div>
+                            
+                            {calculateForecast() ? (
+                                <>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+                                        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                                            <div style={{ fontSize: '0.9em', color: '#666', marginBottom: '5px' }}>Days with Data</div>
+                                            <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#0077B6' }}>{calculateForecast().daysWithData}</div>
+                                        </div>
+                                        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                                            <div style={{ fontSize: '0.9em', color: '#666', marginBottom: '5px' }}>Days Remaining</div>
+                                            <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#FF6B35' }}>{calculateForecast().daysRemaining}</div>
+                                        </div>
+                                        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                                            <div style={{ fontSize: '0.9em', color: '#666', marginBottom: '5px' }}>Avg New Leads/Day</div>
+                                            <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#0077B6' }}>{calculateForecast().daily.avgNewLeads}</div>
+                                        </div>
+                                        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                                            <div style={{ fontSize: '0.9em', color: '#666', marginBottom: '5px' }}>Avg Booked/Day</div>
+                                            <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#22c55e' }}>{calculateForecast().daily.avgBooked}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%)', padding: '25px', borderRadius: '8px', border: '2px solid #0077B6' }}>
+                                        <h4 style={{ color: '#0077B6', marginTop: 0, marginBottom: '20px' }}>📈 Projected End-of-Month Totals</h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px' }}>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Current → Projected</div>
+                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#0077B6' }}>
+                                                    {calculateForecast().current.newLeads} → {calculateForecast().projected.newLeads}
+                                                </div>
+                                                <div style={{ fontSize: '0.9em', color: '#666' }}>New Leads</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Current → Projected</div>
+                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#0077B6' }}>
+                                                    {calculateForecast().current.totalContacted} → {calculateForecast().projected.totalContacted}
+                                                </div>
+                                                <div style={{ fontSize: '0.9em', color: '#666' }}>Total Contacted</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Current → Projected</div>
+                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#FF6B35' }}>
+                                                    {calculateForecast().current.totalBooked} → {calculateForecast().projected.totalBooked}
+                                                </div>
+                                                <div style={{ fontSize: '0.9em', color: '#666' }}>Total Booked</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.85em', color: '#666' }}>Projected</div>
+                                                <div style={{ fontSize: '1.8em', fontWeight: 'bold', color: '#22c55e' }}>
+                                                    {calculateForecast().projected.conversionRate}%
+                                                </div>
+                                                <div style={{ fontSize: '0.9em', color: '#666' }}>Conversion Rate</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ marginTop: '20px', padding: '15px', background: '#fff8f0', borderRadius: '8px', borderLeft: '4px solid #FF6B35' }}>
+                                        <strong style={{ color: '#FF6B35' }}>💡 Note:</strong> Projections are based on your daily averages so far this month. Actual results may vary based on weekends, holidays, and other factors.
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                                    <p>No data available for this month yet. Start adding entries to see forecasts!</p>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div style={{ overflowX: 'auto' }}>
