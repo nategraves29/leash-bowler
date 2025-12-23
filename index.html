@@ -1939,8 +1939,23 @@
                     ) : view === 'comparison' ? (
                         <div>
                             <div className="form-box">
-                                <h3 style={{ color: '#0077B6', marginTop: 0 }}>📍 Location Comparison - {getTrendPeriodLabel()}</h3>
-                                <p style={{ color: '#666', fontSize: '0.9em' }}>Compare performance across all locations for the selected time period.</p>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                    <div>
+                                        <h3 style={{ color: '#0077B6', marginTop: 0, marginBottom: '5px' }}>📍 Location Comparison</h3>
+                                        <p style={{ color: '#666', fontSize: '0.9em', margin: 0 }}>Compare performance across all locations for the selected time period.</p>
+                                    </div>
+                                    <select
+                                        value={trendPeriod}
+                                        onChange={(e) => setTrendPeriod(e.target.value)}
+                                        className="form-input"
+                                        style={{ width: 'auto', padding: '10px 15px', fontSize: '0.95em' }}
+                                    >
+                                        <option value="week">This Week vs Last Week</option>
+                                        <option value="month">This Month vs Last Month</option>
+                                        <option value="last7">Last 7 Days</option>
+                                        <option value="last30">Last 30 Days</option>
+                                    </select>
+                                </div>
                             </div>
                             
                             <div style={{ overflowX: 'auto' }}>
