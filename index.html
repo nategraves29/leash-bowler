@@ -305,32 +305,143 @@
 <body>
     <div id="root"></div>
 
-    <!-- Firebase - Load before using Firebase services -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-      import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-      
-      const firebaseConfig = {
-        apiKey: "AIzaSyCgQV7FiS6V28Yy-bdCNik2tHdmrcz0L6E",
-        authDomain: "leash-bowler.firebaseapp.com",
-        projectId: "leash-bowler",
-        storageBucket: "leash-bowler.firebasestorage.app",
-        messagingSenderId: "363242291452",
-        appId: "1:363242291452:web:2b5f6c007e129fd1e45779"
-      };
-      
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
-      
-      // Make Firebase available globally
-      window.firebaseDB = db;
-      window.firestoreCollection = collection;
-      window.firestoreGetDocs = getDocs;
-      window.firestoreAddDoc = addDoc;
-      window.firestoreDeleteDoc = deleteDoc;
-      window.firestoreDoc = doc;
-      window.firestoreOnSnapshot = onSnapshot;
-    </script>
+   <!-- MSAL for Microsoft Auth -->
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+
+<script>
+  // ─── CONFIG — fill these in ───────────────────────────────────────────
+  const CLIENT_ID    = "dd07e0d1-cab7-434e-87ec-315ca1648a0f";      // from Phase 1
+  const TENANT_ID    = "b9511ebb-4cb9-4992-a7a5-9e66d5fb2b29";      // from Phase 1
+  const SP_HOSTNAME  = "bsuedogs.sharepoint.com";
+  const SP_SITE_PATH = "/sites/LeadEngagementandSupportHubLEASH";     // e.g. /sites/Scenthound
+  const LIST_NAME    = "Bowler Tracker";
+  // ──────────────────────────────────────────────────────────────────────
+
+  const msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: CLIENT_ID,
+      authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+      redirectUri: window.location.origin
+    },
+    cache: { cacheLocation: "sessionStorage" }
+  });
+
+  const SCOPES = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
+
+  // Cache site/list IDs so we only look them up once
+  let _siteId = null;
+  let _listId = null;
+
+  const getToken = async () => {
+    await msalInstance.initialize();
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+      const result = await msalInstance.loginPopup({ scopes: SCOPES });
+      return result.accessToken;
+    }
+    const result = await msalInstance.acquireTokenSilent({
+      scopes: SCOPES,
+      account: accounts[0]
+    });
+    return result.accessToken;
+  };
+
+  const getSiteAndListIds = async (token) => {
+    if (_siteId && _listId) return { siteId: _siteId, listId: _listId };
+
+    // Get site ID
+    const siteRes = await fetch(
+      `https://graph.microsoft.com/v1.0/sites/${SP_HOSTNAME}:${SP_SITE_PATH}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const siteData = await siteRes.json();
+    _siteId = siteData.id;
+
+    // Get list ID
+    const listRes = await fetch(
+      `https://graph.microsoft.com/v1.0/sites/${_siteId}/lists?$filter=displayName eq '${LIST_NAME}'`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const listData = await listRes.json();
+    _listId = listData.value[0].id;
+
+    return { siteId: _siteId, listId: _listId };
+  };
+
+  // ── DROP-IN REPLACEMENTS FOR YOUR FIREBASE FUNCTIONS ──────────────────
+
+  window.spGetEntries = async () => {
+    const token = await getToken();
+    const { siteId, listId } = await getSiteAndListIds(token);
+    let url = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items?expand=fields&$top=5000`;
+    let allItems = [];
+
+    // Handle pagination
+    while (url) {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      allItems = allItems.concat(data.value);
+      url = data["@odata.nextLink"] || null;
+    }
+
+    return allItems.map(item => ({
+      id: item.id,
+      date: item.fields.EntryDate ? item.fields.EntryDate.split('T')[0] : '',
+      location: item.fields.Location || '',
+      newLeads: item.fields.NewLeads || 0,
+      activeTrialLeads: item.fields.ActiveTrialLeads || 0,
+      texted: item.fields.Texted || 0,
+      called: item.fields.Called || 0,
+      bookedPhone: item.fields.BookedPhone || 0,
+      bookedText: item.fields.BookedText || 0,
+      comments: item.fields.Comments || '',
+      enteredBy: item.fields.EnteredBy || ''
+    }));
+  };
+
+  window.spAddEntry = async (entry) => {
+    const token = await getToken();
+    const { siteId, listId } = await getSiteAndListIds(token);
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fields: {
+            Title: `${entry.date}-${entry.location}`,
+            EntryDate: entry.date,
+            Location: entry.location,
+            NewLeads: entry.newLeads,
+            ActiveTrialLeads: entry.activeTrialLeads,
+            Texted: entry.texted,
+            Called: entry.called,
+            BookedPhone: entry.bookedPhone,
+            BookedText: entry.bookedText,
+            Comments: entry.comments || '',
+            EnteredBy: entry.enteredBy || ''
+          }
+        })
+      }
+    );
+    return await res.json();
+  };
+
+  window.spDeleteEntry = async (itemId) => {
+    const token = await getToken();
+    const { siteId, listId } = await getSiteAndListIds(token);
+    await fetch(
+      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${itemId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+  };
+</script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
@@ -375,39 +486,19 @@
             const locations = ['Cedar Mill', 'Tigard', 'Hillsboro', 'Sherwood'];
 
             useEffect(() => {
-                // Wait for Firebase to be ready
-                const checkFirebase = setInterval(() => {
-                    if (window.firebaseDB) {
-                        clearInterval(checkFirebase);
-                        loadEntriesFromFirebase();
-                    }
-                }, 100);
-                
-                return () => clearInterval(checkFirebase);
-            }, []);
+   		 loadEntriesFromSharePoint();
+		}, []);
 
-            const loadEntriesFromFirebase = async () => {
-                try {
-                    const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
-                    const snapshot = await window.firestoreGetDocs(entriesCol);
-                    const entriesData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setEntries(entriesData.sort((a, b) => new Date(b.date) - new Date(a.date)));
-                } catch (error) {
-                    console.error('Error loading entries:', error);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            useEffect(() => {
-                if (!loading) {
-                    // No longer need to save to localStorage
-                    // Data is automatically saved to Firebase when added
-                }
-            }, [entries, loading]);
+            const loadEntriesFromSharePoint = async () => {
+    			try {
+        			const entriesData = await window.spGetEntries();
+        			setEntries(entriesData.sort((a, b) => new Date(b.date) - new Date(a.date)));
+    			} catch (error) {
+        			console.error('Error loading entries:', error);
+    			} finally {
+        			setLoading(false);
+    			}
+			};
 
             const handleInputChange = (field, value) => {
                 setCurrentEntry(prev => ({
@@ -424,18 +515,13 @@
                     };
                     
                     if (editingEntry) {
-                        // Update existing entry
-                        const docRef = window.firestoreDoc(window.firebaseDB, 'entries', editingEntry.id);
-                        await window.firestoreDeleteDoc(docRef);
-                        const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
-                        await window.firestoreAddDoc(entriesCol, entryToSave);
-                        setEditingEntry(null);
-                    } else {
-                        // Add new entry
-                        const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
-                        await window.firestoreAddDoc(entriesCol, entryToSave);
-                    }
-                    await loadEntriesFromFirebase();
+    				await window.spDeleteEntry(editingEntry.id);
+    				await window.spAddEntry(entryToSave);
+    				setEditingEntry(null);
+			} else {
+    				await window.spAddEntry(entryToSave);
+			}
+                    await loadEntriesFromSharePoint();
                     setCurrentEntry({
                         date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
                         location: 'Cedar Mill',
@@ -468,9 +554,8 @@
                         setDeletedEntries(prev => prev.filter(e => e.id !== entry.id));
                     }, 10000);
                     
-                    const docRef = window.firestoreDoc(window.firebaseDB, 'entries', entry.id);
-                    await window.firestoreDeleteDoc(docRef);
-                    await loadEntriesFromFirebase();
+                    await window.spDeleteEntry(entry.id);
+		    await loadEntriesFromSharePoint();
                 } catch (error) {
                     console.error('Error deleting entry:', error);
                     alert('Error deleting entry. Please try again.');
@@ -484,14 +569,13 @@
                     const lastDeleted = deletedEntries[deletedEntries.length - 1];
                     const { id, ...entryData } = lastDeleted;
                     
-                    const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
-                    await window.firestoreAddDoc(entriesCol, entryData);
+                    await window.spAddEntry(entryData);
                     
                     setDeletedEntries(prev => prev.slice(0, -1));
                     if (deletedEntries.length <= 1) {
                         setShowUndoToast(false);
                     }
-                    await loadEntriesFromFirebase();
+                    await loadEntriesFromSharePoint();
                 } catch (error) {
                     console.error('Error restoring entry:', error);
                     alert('Error restoring entry. Please try again.');
@@ -764,12 +848,11 @@
                         }
 
                         for (const entry of newEntries) {
-                            const { id, ...entryData } = entry;
-                            const entriesCol = window.firestoreCollection(window.firebaseDB, 'entries');
-                            await window.firestoreAddDoc(entriesCol, entryData);
-                        }
+    			const { id, ...entryData } = entry;
+    			await window.spAddEntry(entryData);
+			}
                         
-                        await loadEntriesFromFirebase();
+                        await loadEntriesFromSharePoint();
                         alert(`Successfully imported ${newEntries.length} new entries!`);
                     }
                 } catch (error) {
@@ -1434,7 +1517,7 @@
                     </div>
 
                     <div className="info-note">
-                        <strong>💡 Pro Tip:</strong> Your data is automatically saved to Firebase and synced across all users. Export to CSV regularly for backup and reporting in Google Sheets or Excel.
+                        <strong>💡 Pro Tip:</strong> Your data is automatically saved to Sharepoint and synced across all users. Export to CSV regularly for backup and reporting in Google Sheets or Excel.
                     </div>
 
                     <div className="controls">
