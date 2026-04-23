@@ -323,7 +323,7 @@
       authority: `https://login.microsoftonline.com/${TENANT_ID}`,
       redirectUri: window.location.origin
     },
-    cache: { cacheLocation: "sessionStorage" }
+   cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
   });
 
   const SCOPES = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
@@ -335,27 +335,15 @@
   const getToken = async () => {
     await msalInstance.initialize();
     const accounts = msalInstance.getAllAccounts();
-    
-    // Try silent token first if we have an account
-    if (accounts.length > 0) {
-        try {
-            const result = await msalInstance.acquireTokenSilent({
-                scopes: SCOPES,
-                account: accounts[0]
-            });
-            return result.accessToken;
-        } catch (e) {
-            // silent failed, fall through to ssoSilent
-        }
-    }
-    
-    // Use existing Microsoft 365 session — no popup needed
-    try {
-        const result = await msalInstance.ssoSilent({ scopes: SCOPES });
+    if (accounts.length === 0) {
+        const result = await msalInstance.loginPopup({ scopes: SCOPES });
         return result.accessToken;
-    } catch (e) {
-        throw new Error('Authentication failed. Please open the tracker directly at https://nategraves29.github.io/leash-bowler in a new tab, sign in once, then return to SharePoint.');
     }
+    const result = await msalInstance.acquireTokenSilent({
+        scopes: SCOPES,
+        account: accounts[0]
+    });
+    return result.accessToken;
 };
 
   const getSiteAndListIds = async (token) => {
