@@ -336,15 +336,23 @@
     await msalInstance.initialize();
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length === 0) {
-      const result = await msalInstance.loginPopup({ scopes: SCOPES });
-      return result.accessToken;
+        try {
+            const result = await msalInstance.loginPopup({ 
+                scopes: SCOPES,
+                prompt: 'none'
+            });
+            return result.accessToken;
+        } catch {
+            const result = await msalInstance.loginPopup({ scopes: SCOPES });
+            return result.accessToken;
+        }
     }
     const result = await msalInstance.acquireTokenSilent({
-      scopes: SCOPES,
-      account: accounts[0]
+        scopes: SCOPES,
+        account: accounts[0]
     });
     return result.accessToken;
-  };
+};
 
   const getSiteAndListIds = async (token) => {
     if (_siteId && _listId) return { siteId: _siteId, listId: _listId };
