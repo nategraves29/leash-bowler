@@ -335,23 +335,27 @@
   const getToken = async () => {
     await msalInstance.initialize();
     const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
+    
+    // Try silent token first if we have an account
+    if (accounts.length > 0) {
         try {
-            const result = await msalInstance.loginPopup({ 
+            const result = await msalInstance.acquireTokenSilent({
                 scopes: SCOPES,
-                prompt: 'none'
+                account: accounts[0]
             });
             return result.accessToken;
-        } catch {
-            const result = await msalInstance.loginPopup({ scopes: SCOPES });
-            return result.accessToken;
+        } catch (e) {
+            // silent failed, fall through to ssoSilent
         }
     }
-    const result = await msalInstance.acquireTokenSilent({
-        scopes: SCOPES,
-        account: accounts[0]
-    });
-    return result.accessToken;
+    
+    // Use existing Microsoft 365 session — no popup needed
+    try {
+        const result = await msalInstance.ssoSilent({ scopes: SCOPES });
+        return result.accessToken;
+    } catch (e) {
+        throw new Error('Authentication failed. Please open the tracker directly at https://nategraves29.github.io/leash-bowler in a new tab, sign in once, then return to SharePoint.');
+    }
 };
 
   const getSiteAndListIds = async (token) => {
